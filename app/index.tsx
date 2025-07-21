@@ -12,7 +12,7 @@ export default function Index() {
     >
       <Text>Edit app/index.tsx to edit this screen.</Text>
 
-      <Link href="/register">
+      <Link href="/auth/register">
         <Text style={{ color: "blue" }}>Go to Register</Text>
       </Link>
     </View>
