@@ -33,7 +33,7 @@ export default function RegisterScreen() {
         secureTextEntry
       />
 
-      <TouchableOpacity style={styles.button}>
+      <TouchableOpacity style={styles.button} onPress={() => router.push('/parking/available')}>
         <Text style={styles.buttonText}>Registrarte</Text>
       </TouchableOpacity>
     </ScrollView>
