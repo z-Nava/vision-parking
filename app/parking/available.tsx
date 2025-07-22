@@ -2,6 +2,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import BottomNav from '../../components/BottomNav';
+import { useRouter } from 'expo-router';
+
 
 const parkingLots = [
   {
@@ -17,6 +19,8 @@ const parkingLots = [
 ];
 
 export default function AvailableParking() {
+    const router = useRouter();
+  
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Estacionamientos disponibles</Text>
@@ -27,7 +31,7 @@ export default function AvailableParking() {
             <Text style={styles.lotName}>{lot.name}</Text>
             <Text style={styles.lotDetail}>Alias: {lot.alias}</Text>
             <Text style={styles.lotDetail}>Ubicación: {lot.location}</Text>
-            <TouchableOpacity style={styles.button}>
+            <TouchableOpacity style={styles.button} onPress={() => router.push('/parking/add')}>
               <Text style={styles.buttonText}>Solicitar acceso</Text>
             </TouchableOpacity>
           </View>
