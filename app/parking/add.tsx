@@ -3,8 +3,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import * as DocumentPicker from 'expo-document-picker';
+import { useRouter } from 'expo-router';
+
 
 export default function AddParking() {
+    const router = useRouter();
   const handleFilePick = async () => {
   try {
     const result = await DocumentPicker.getDocumentAsync({
@@ -36,11 +39,13 @@ export default function AddParking() {
         {/* Icono simulado */}
         <Text style={styles.iconPlaceholder}>📄➕</Text>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleFilePick}>
+        <TouchableOpacity style={styles.saveButton} onPress={() => {
+                handleFilePick(); // Si quieres seguir mostrando el alert del archivo...
+                router.push('/vehicle/config'); // Navegación a la siguiente pantalla
+            }}>
           <Text style={styles.saveButtonText}>Guardar solicitud</Text>
         </TouchableOpacity>
       </View>
-
       <BottomNav />
     </View>
   );
