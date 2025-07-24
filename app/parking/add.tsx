@@ -46,7 +46,6 @@ export default function AddParking() {
           <Text style={styles.saveButtonText}>Guardar solicitud</Text>
         </TouchableOpacity>
       </View>
-      <BottomNav />
     </View>
   );
 }

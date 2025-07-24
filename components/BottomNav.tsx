@@ -8,14 +8,11 @@ export default function BottomNav() {
 
   return (
     <View style={styles.navbar}>
-      <TouchableOpacity onPress={() => router.push('/')}>
+      <TouchableOpacity onPress={() => router.push('/home/indexapp')}>
         <Text style={styles.navIcon}>🏠</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => router.push('/')}>
+      <TouchableOpacity onPress={() => router.push('/parking/my-parkings')}>
         <Text style={styles.navIcon}>🅿️</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => router.push('/')}>
-        <Text style={styles.navIcon}>🔔</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push('/')}>
         <Text style={styles.navIcon}>👤</Text>

@@ -37,9 +37,6 @@ export default function AvailableParking() {
           </View>
         ))}
       </ScrollView>
-
-      {/* Barra inferior */}
-      <BottomNav />
     </View>
   );
 }
