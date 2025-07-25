@@ -1,39 +1,81 @@
 // app/auth/register.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import axios from 'axios';
+import AlertBox from '../../components/AlertBox'; // Asegúrate de que la ruta sea correcta
 
 export default function RegisterScreen() {
   const router = useRouter();
 
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [error, setError] = useState('');
+  const [detail, setDetail] = useState('');
+
+  const handleRegister = async () => {
+    try {
+      const response = await axios.post('https://vpa.disse.space/api/signup', {
+        usr_name: name,
+        usr_email: email,
+        usr_password: password,
+      });
+
+      console.log('Registro exitoso:', response.data);
+      setError('');
+      router.push('/home/indexapp');
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.message || 'Error desconocido';
+      console.log('Error al registrar:', apiMessage);
+
+      setError('AUTH001');
+      setDetail(apiMessage);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Logo (se agrega cuando lo proporciones) */}
-      {/* <Image source={require('../../assets/images/logo.png')} style={styles.logo} /> */}
       <Image source={require('../../assets/images/react-logo.png')} style={styles.logo} />
 
       <Text style={styles.title}>Regístrate</Text>
       <Text style={styles.subtitle}>Ingresa tus datos para registrarte en la app</Text>
 
+      {error && (
+        <AlertBox
+          type="error"
+          code={error}
+          message="Error en el registro"
+          detail={detail}
+        />
+      )}
+
       <TextInput
         style={styles.input}
         placeholder="Ingresa un nombre de usuario"
         placeholderTextColor="#666"
+        value={name}
+        onChangeText={setName}
       />
       <TextInput
         style={styles.input}
         placeholder="Ingresa tu correo"
         placeholderTextColor="#666"
         keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
       />
       <TextInput
         style={styles.input}
         placeholder="Ingresa tu contraseña"
         placeholderTextColor="#666"
         secureTextEntry
+        value={password}
+        onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={() => router.push('/parking/available')}>
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
         <Text style={styles.buttonText}>Registrarte</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -43,7 +85,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#00224D', // Azul oscuro
+    backgroundColor: '#00224D',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
