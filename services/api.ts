@@ -1,8 +1,11 @@
 // services/api.ts
+import Constants from 'expo-constants';
 import axios from 'axios';
 
+const apiUrl = Constants.expoConfig?.extra?.apiUrl;
+console.log('API URL:', apiUrl);
 const api = axios.create({
-  baseURL: 'https://vpa.disse.space/api/',
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },

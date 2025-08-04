@@ -3,7 +3,9 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
-import AlertBox from '../../components/AlertBox'; // Asegúrate de que la ruta sea correcta
+import AlertBox from '../../components/AlertBox';
+import { register } from '../../services/authService';
+
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -17,12 +19,8 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     try {
-      const response = await axios.post('https://vpa.disse.space/api/signup', {
-        usr_name: name,
-        usr_email: email,
-        usr_password: password,
-      });
-
+      const response = await register(name, email, password);
+      
       console.log('Registro exitoso:', response.data);
       setError('');
       router.push('/parking/available');
