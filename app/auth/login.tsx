@@ -50,7 +50,7 @@ export default function LoginScreen() {
 
       <TouchableOpacity style={styles.button} onPress={() => {
                 handleLogin(); // Si quieres seguir mostrando el alert del archivo...
-                router.push('/home/indexapp'); // Navegación a la siguiente pantalla
+                router.push('/parking/available'); // Navegación a la siguiente pantalla
             }}>
         <Text style={styles.buttonText}>Iniciar Sesión</Text>
       </TouchableOpacity>
