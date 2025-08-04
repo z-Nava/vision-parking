@@ -21,7 +21,7 @@ export default function RegisterScreen() {
     try {
       const response = await register(name, email, password);
       
-      console.log('Registro exitoso:', response.data);
+      console.log('Registro exitoso:', response);
       setError('');
       router.push('/parking/available');
     } catch (err: any) {

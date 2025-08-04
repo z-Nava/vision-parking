@@ -2,10 +2,9 @@
 import Constants from 'expo-constants';
 import axios from 'axios';
 
-const apiUrl = Constants.expoConfig?.extra?.apiUrl;
-console.log('API URL:', apiUrl);
+//const apiUrl = Constants.expoConfig.extra.apiUrl;
 const api = axios.create({
-  baseURL: apiUrl,
+  baseURL: 'http://localhost:3000/api',
   headers: {
     'Content-Type': 'application/json',
   },
