@@ -23,7 +23,7 @@ export default function RegisterScreen() {
       
       console.log('Registro exitoso:', response);
       setError('');
-      router.push('/auth/login'); 
+      router.push('/auth/test-secure'); // Redirige a una pantalla de prueba o confirmación
     } catch (err: any) {
       const apiMessage = err?.response?.data?.message || 'Error desconocido';
       console.log('Error al registrar:', apiMessage);

@@ -1,55 +1,57 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { login } from '../../services/authService';
-import { useAuth } from '../../hooks/useAuth';
 import AlertBox from '../../components/AlertBox';
+import api from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 import * as SecureStore from 'expo-secure-store';
 
-export default function LoginScreen() {
+export default function VerifyCodeScreen() {
   const router = useRouter();
   const { setToken } = useAuth();
 
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [detail, setDetail] = useState('');
 
-  const handleLogin = async () => {
+  const handleVerifyCode = async () => {
   try {
-    const response = await login(email, password);
-    console.log('Login exitoso:', response);
+    const usr_id = await SecureStore.getItemAsync('usr_id');
 
-    const usr_id = response.data?.usr_id;
-    console.log('ID de usuario recibido:', usr_id);
-    if (!usr_id) throw new Error('Respuesta inválida del servidor');
+    if (!usr_id) throw new Error('No se encontró ID de usuario');
 
-    console.log('Guardando ID de usuario en SecureStore:', usr_id);
-    await SecureStore.setItemAsync('usr_id', usr_id);
-    console.log('ID de usuario guardado en SecureStore:', usr_id);
+    const response = await api.post('/verify', {
+      usr_id,
+      cod_code: code,
+    });
 
-    router.push('/auth/verify-code'); 
+    const { token } = response.data;
+    setToken(token);
+    console.log('Token recibido:', token);
+
+    await SecureStore.deleteItemAsync('usr_id'); // Limpiamos después de usar
+    router.push('/parking/available');
   } catch (err: any) {
-    const apiMessage = err?.response?.data?.message || err?.message || 'Error desconocido';
-    console.log('Error al iniciar sesión:', apiMessage);
+    const apiMessage = err?.response?.data?.message || 'Error desconocido';
+    console.log('Error al verificar:', apiMessage);
     setError('AUTH002');
     setDetail(apiMessage);
   }
 };
 
-
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Image source={require('../../assets/images/react-logo.png')} style={styles.logo} />
-      <Text style={styles.title}>Iniciar sesión</Text>
-      <Text style={styles.subtitle}>Ingresa tus credenciales</Text>
+
+      <Text style={styles.title}>Verifica tu código</Text>
+      <Text style={styles.subtitle}>Ingresa el código enviado a tu correo electrónico</Text>
 
       {error && (
         <AlertBox
           type="error"
           code={error}
-          message="Error en el login"
+          message="Error al verificar el código"
           detail={detail}
         />
       )}
@@ -64,15 +66,15 @@ export default function LoginScreen() {
       />
       <TextInput
         style={styles.input}
-        placeholder="Contraseña"
+        placeholder="Código de verificación"
         placeholderTextColor="#666"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
+        keyboardType="numeric"
+        value={code}
+        onChangeText={setCode}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Iniciar sesión</Text>
+      <TouchableOpacity style={styles.button} onPress={handleVerifyCode}>
+        <Text style={styles.buttonText}>Verificar</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -87,13 +89,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logo: {
-    width: 180,
-    height: 180,
+    width: 150,
+    height: 150,
     marginBottom: 30,
     resizeMode: 'contain',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#fff',
     marginBottom: 10,
