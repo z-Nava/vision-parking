@@ -25,7 +25,7 @@ export default function RegisterScreen() {
 
       console.log('Registro exitoso:', response.data);
       setError('');
-      router.push('/home/indexapp');
+      router.push('/parking/available');
     } catch (err: any) {
       const apiMessage = err?.response?.data?.message || 'Error desconocido';
       console.log('Error al registrar:', apiMessage);
