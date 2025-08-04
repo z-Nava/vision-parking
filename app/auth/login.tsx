@@ -1,39 +1,53 @@
-// app/auth/login.tsx
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { login } from '../../services/authService';
+import { useAuth } from '../../hooks/useAuth';
+import AlertBox from '../../components/AlertBox';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { setToken } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [detail, setDetail] = useState('');
 
-  const handleLogin = () => {
-    // Simulación de login exitoso
-    if (email && password) {
-      console.log('Login correcto:', { email, password });
-      router.push('/'); //debe llevar a home
-    } else {
-      alert('Completa ambos campos');
+  const handleLogin = async () => {
+    try {
+      const response = await login(email, password);
+      console.log('Login exitoso:', response);
+
+      await setToken(response.token); // Guardamos el token globalmente
+      setError('');
+      router.push('/parking/available');
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.message || 'Error desconocido';
+      console.log('Error al iniciar sesión:', apiMessage);
+      setError('AUTH002');
+      setDetail(apiMessage);
     }
-  };
-
-  const handleErrorAuth = () => {
-    alert('Error de autenticación simulado');
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Logo temporal */}
       <Image source={require('../../assets/images/react-logo.png')} style={styles.logo} />
+      <Text style={styles.title}>Iniciar sesión</Text>
+      <Text style={styles.subtitle}>Ingresa tus credenciales</Text>
 
-      <Text style={styles.title}>Inicia sesión</Text>
-      <Text style={styles.subtitle}>Ingresa tu correo y contraseña para entrar a la app</Text>
+      {error && (
+        <AlertBox
+          type="error"
+          code={error}
+          message="Error en el login"
+          detail={detail}
+        />
+      )}
 
       <TextInput
         style={styles.input}
-        placeholder="Ingresa tu correo"
+        placeholder="Correo electrónico"
         placeholderTextColor="#666"
         keyboardType="email-address"
         value={email}
@@ -41,22 +55,15 @@ export default function LoginScreen() {
       />
       <TextInput
         style={styles.input}
-        placeholder="Ingresa tu contraseña"
+        placeholder="Contraseña"
         placeholderTextColor="#666"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={() => {
-                handleLogin(); 
-                router.push('/parking/available');
-            }}>
-        <Text style={styles.buttonText}>Iniciar Sesión</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.errorButton} onPress={handleErrorAuth}>
-        <Text style={styles.buttonText}>Error Auth</Text>
+      <TouchableOpacity style={styles.button} onPress={handleLogin}>
+        <Text style={styles.buttonText}>Iniciar sesión</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -71,16 +78,16 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   logo: {
-    width: 150,
-    height: 150,
+    width: 180,
+    height: 180,
     marginBottom: 30,
     resizeMode: 'contain',
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: '#fff',
-    marginBottom: 5,
+    marginBottom: 10,
   },
   subtitle: {
     color: '#ccc',
@@ -103,14 +110,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  errorButton: {
-    width: '100%',
-    backgroundColor: '#1A1A1A',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
+    marginTop: 10,
   },
   buttonText: {
     color: '#fff',
