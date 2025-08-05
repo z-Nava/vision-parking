@@ -10,35 +10,39 @@ export default function VerifyCodeScreen() {
   const router = useRouter();
   const { setToken } = useAuth();
 
-  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [detail, setDetail] = useState('');
 
   const handleVerifyCode = async () => {
-  try {
-    const usr_id = await SecureStore.getItemAsync('usr_id');
+    try {
+      const usr_id = await SecureStore.getItemAsync('usr_id');
+      if (!usr_id) throw new Error('No se encontró ID de usuario');
 
-    if (!usr_id) throw new Error('No se encontró ID de usuario');
+      const response = await api.post('/verify', {
+        usr_id,
+        cod_code: parseInt(code),
+      });
 
-    const response = await api.post('/verify', {
-      usr_id,
-      cod_code: code,
-    });
+      const token = response.data?.tok_token;
 
-    const { token } = response.data;
-    setToken(token);
-    console.log('Token recibido:', token);
+      if (!token) throw new Error('Token no recibido');
 
-    await SecureStore.deleteItemAsync('usr_id'); // Limpiamos después de usar
-    router.push('/parking/available');
-  } catch (err: any) {
-    const apiMessage = err?.response?.data?.message || 'Error desconocido';
-    console.log('Error al verificar:', apiMessage);
-    setError('AUTH002');
-    setDetail(apiMessage);
-  }
-};
+      console.log('Token recibido:', token);
+      await SecureStore.setItemAsync('auth_token', token); // 🔐 Guardamos el token
+      console.log('Token guardado en SecureStore', token);
+      console.log('ID de usuario conservado en SecureStore:', usr_id);
+
+      setToken(token);
+      router.push('/parking/available');
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.message || err?.message || 'Error desconocido';
+      console.log('Error al verificar:', apiMessage);
+      setError('AUTH002');
+      setDetail(apiMessage);
+    }
+  };
+
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -56,14 +60,6 @@ export default function VerifyCodeScreen() {
         />
       )}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Correo electrónico"
-        placeholderTextColor="#666"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
       <TextInput
         style={styles.input}
         placeholder="Código de verificación"

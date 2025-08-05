@@ -18,20 +18,24 @@ export default function RegisterScreen() {
   const [detail, setDetail] = useState('');
 
   const handleRegister = async () => {
-    try {
-      const response = await register(name, email, password);
-      
-      console.log('Registro exitoso:', response);
-      setError('');
-      router.push('/auth/test-secure'); // Redirige a una pantalla de prueba o confirmación
-    } catch (err: any) {
-      const apiMessage = err?.response?.data?.message || 'Error desconocido';
-      console.log('Error al registrar:', apiMessage);
+  try {
+    const response = await register(name, email, password);
+    console.log('Registro exitoso:', response);
+    setError('');
+    router.push('/auth/login');
+  } catch (err: any) {
+    console.error('Error completo:', err); // 🔍 <--- agrega este log
+    const apiMessage =
+      err?.response?.data?.message ||
+      err?.message ||
+      'Error desconocido';
+    console.log('Error al registrar:', apiMessage);
 
-      setError('AUTH001');
-      setDetail(apiMessage);
-    }
-  };
+    setError('AUTH001');
+    setDetail(apiMessage);
+  }
+};
+
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

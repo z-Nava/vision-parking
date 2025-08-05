@@ -11,3 +11,4 @@ export const useAuth = () => {
 
   return { token, setToken, isLoggedIn, logout };
 };
+

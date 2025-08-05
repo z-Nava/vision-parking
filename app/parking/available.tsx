@@ -1,42 +1,69 @@
 // app/parking/available.tsx
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
-
-const parkingLots = [
-  {
-    name: 'Universidad Tecnologica de Torreon',
-    alias: 'UTT',
-    location: 'Carretera Torreon-Matamoros',
-  },
-  {
-    name: 'Milwaukee Tool Torreon',
-    alias: 'MW',
-    location: 'Boulevard San Pedro',
-  },
-];
+type Company = {
+  cmp_id: string;
+  cmp_name: string;
+};
 
 export default function AvailableParking() {
-    const router = useRouter();
-  
+  const router = useRouter();
+  const { isLoggedIn } = useAuth();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    const fetchCompanies = async () => {
+      try {
+        const response = await api.get('/companies');
+        setCompanies(response.data);
+      } catch (error) {
+        console.error('Error al obtener estacionamientos:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCompanies();
+  }, [isLoggedIn]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Estacionamientos disponibles</Text>
 
-      <ScrollView style={styles.scroll}>
-        {parkingLots.map((lot, index) => (
-          <View key={index} style={styles.card}>
-            <Text style={styles.lotName}>{lot.name}</Text>
-            <Text style={styles.lotDetail}>Alias: {lot.alias}</Text>
-            <Text style={styles.lotDetail}>Ubicación: {lot.location}</Text>
-            <TouchableOpacity style={styles.button} onPress={() => router.push('/parking/add')}>
-              <Text style={styles.buttonText}>Solicitar acceso</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-      </ScrollView>
+      {loading ? (
+        <ActivityIndicator color="#FACC15" size="large" />
+      ) : (
+        <ScrollView style={styles.scroll}>
+          {companies.map((company) => (
+            <View key={company.cmp_id} style={styles.card}>
+              <Text style={styles.lotName}>{company.cmp_name}</Text>
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={() => router.push({
+                    pathname: '/parking/add',
+                    params: {
+                      cmp_id: company.cmp_id,
+                      cmp_name: company.cmp_name
+                    }
+                  })}
+                >
+                <Text style={styles.buttonText}>Solicitar acceso</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -68,11 +95,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 5,
-  },
-  lotDetail: {
-    color: '#ccc',
-    marginBottom: 5,
+    marginBottom: 10,
   },
   button: {
     backgroundColor: '#FFCC00',
@@ -84,21 +107,5 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#00224D',
     fontWeight: '600',
-  },
-  navbar: {
-    position: 'absolute',
-    bottom: 0,
-    backgroundColor: '#001B3A',
-    height: 60,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    borderTopColor: '#003366',
-    borderTopWidth: 1,
-  },
-  navIcon: {
-    fontSize: 22,
-    color: 'white',
   },
 });
