@@ -2,10 +2,14 @@
 import api from './api';
 
 export const login = async (email: string, password: string) => {
+  const platform = 'VISION_PARKING_MOVIL';
+  console.log('Iniciando sesión con:', { email, password, platform });
   const { data } = await api.post('/signin', {
     usr_email: email,
     usr_password: password,
+    pry_name: platform,
   });
+  console.log('Respuesta del login:', data);
   return data;
 };
 

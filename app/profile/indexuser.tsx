@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
+import { clearSession } from '@/utils/clearSession';
+import { useEffect } from 'react';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -69,6 +71,12 @@ export default function ProfileScreen() {
               <Text style={styles.modelo}>{v.modelo}</Text>
             </View>
           ))}
+        <TouchableOpacity
+            style={[styles.clearSessionButton, { backgroundColor: '#B22222' }]}
+            onPress={clearSession}
+          >
+            <Text style={styles.clearSessionText}>🧹 Borrar Sesión</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -170,4 +178,18 @@ const styles = StyleSheet.create({
     color: '#facc15',
     fontWeight: '600',
   },
+  clearSessionButton: {
+  width: '100%',
+  backgroundColor: '#8B0000', // rojo oscuro elegante
+  paddingVertical: 14,
+  borderRadius: 10,
+  alignItems: 'center',
+  marginTop: 20,
+},
+  clearSessionText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+
 });

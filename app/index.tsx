@@ -1,8 +1,45 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+// app/index.tsx
+import { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 
 export default function Index() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('auth_token');
+        const usrId = await SecureStore.getItemAsync('usr_id');
+
+        if (token) {
+          console.log('Token encontrado, redirigiendo a /parking/available');
+          router.replace('/home/indexapp');
+        } else if (usrId) {
+          console.log('Usuario con sesión pendiente, redirigiendo a verificación');
+          router.replace('/auth/verify-code');
+        } else {
+          console.log('No hay sesión activa, mostrando opciones');
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Error al verificar sesión:', err);
+        setLoading(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFCC00" />
+        <Text style={{ color: '#ccc', marginTop: 10 }}>Verificando sesión...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -11,20 +48,20 @@ export default function Index() {
       <Text style={styles.title}>Bienvenido a VisionParking</Text>
       <Text style={styles.subtitle}>Selecciona una opción para continuar</Text>
 
-      {/* Botón REGISTRARSE */}
-      <TouchableOpacity
-        style={[styles.button, styles.registerButton]}
-        onPress={() => router.push('/auth/register')}
-      >
-        <Text style={styles.buttonTextDark}>Registrarse</Text>
-      </TouchableOpacity>
-
-      {/* Botón INICIAR SESIÓN */}
       <TouchableOpacity
         style={[styles.button, styles.loginButton]}
         onPress={() => router.push('/auth/login')}
       >
         <Text style={styles.buttonTextLight}>Iniciar Sesión</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.subtitle}>¿Aún no tienes cuenta? ¡Regístrate!</Text>
+
+      <TouchableOpacity
+        style={[styles.button, styles.registerButton]}
+        onPress={() => router.push('/auth/register')}
+      >
+        <Text style={styles.buttonTextDark}>Registrarse</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -37,6 +74,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#00224D',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logo: {
     width: 150,
