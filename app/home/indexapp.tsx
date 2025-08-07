@@ -6,7 +6,8 @@ import { useUserData } from '../../hooks/useUserData';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { username, vehicles, loading } = useUserData();
+  const { username, vehicles, loading, hasAccess } = useUserData();
+  
 
   const cajones = [
     { id: 'A1', estado: 'Disponible', color: '#2ecc71', reservable: false },
@@ -29,8 +30,15 @@ export default function HomeScreen() {
       <ScrollView>
         <Text style={styles.title}>VisionParking</Text>
         <Text style={styles.welcome}>Hola! <Text style={styles.username}>{username}</Text></Text>
-
+        {!hasAccess && (
+              <View style={styles.alertBox}>
+                <Text style={styles.alertText}>
+                  Aún no se te ha asignado acceso a ningún estacionamiento. Espera a que un administrador apruebe tu solicitud.
+                </Text>
+              </View>
+            )}
         {/* Cajones disponibles */}
+        
         <Text style={styles.sectionTitle}>Cajones disponibles</Text>
         {cajones.map((cajon, index) => (
           <View key={index} style={styles.cajonCard}>
@@ -171,4 +179,16 @@ const styles = StyleSheet.create({
     color: '#facc15',
     fontWeight: '600',
   },
+  alertBox: {
+  backgroundColor: '#F87171',
+  padding: 12,
+  borderRadius: 10,
+  marginBottom: 15,
+},
+  alertText: {
+  color: '#fff',
+  fontWeight: '600',
+  textAlign: 'center',
+},
+
 });

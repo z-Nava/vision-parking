@@ -8,38 +8,44 @@ export function useUserData() {
   const [username, setUsername] = useState<string>('');
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasAccess, setHasAccess] = useState(false); 
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        console.log('useUserData: Iniciando carga de datos del usuario...');
-        const usr_id = await SecureStore.getItemAsync('usr_id');
-        console.log('useUserData: ID de usuario obtenido:', usr_id);
-        const token = await SecureStore.getItemAsync('auth_token');
-        console.log('useUserData: Token obtenido:', token);
-        if (!usr_id || !token) throw new Error('No auth data');
+  const fetchUserData = async () => {
+    try {
+      console.log('useUserData: Iniciando carga de datos del usuario...');
+      const usr_id = await SecureStore.getItemAsync('usr_id');
+      console.log('useUserData: ID de usuario obtenido:', usr_id);
+      const token = await SecureStore.getItemAsync('auth_token');
+      console.log('useUserData: Token obtenido:', token);
+      if (!usr_id || !token) throw new Error('No auth data');
 
-        setUserId(usr_id);
+      setUserId(usr_id);
 
-        // Obtener info del usuario (nombre)
-        const userRes = await api.get(`/info/${usr_id}`);
-        console.log('useUserData: Datos del usuario obtenidos:', userRes.data);
-        setUsername(userRes.data?.usr_name || 'Usuario');
-        console.log('useUserData: Nombre de usuario establecido:', userRes.data?.usr_name || 'Usuario');
+      // Obtener info del usuario (nombre)
+      const userRes = await api.get(`/info/${usr_id}`);
+      console.log('useUserData: Datos del usuario obtenidos:', userRes.data);
+      setUsername(userRes.data?.usr_name || 'Usuario');
 
-        // Obtener vehículos
-        const vehRes = await api.get(`/users/${usr_id}/vehicles`);
-        console.log('useUserData: Vehículos obtenidos:', vehRes.data);
-        setVehicles(vehRes.data?.data || []);
-      } catch (err) {
-        console.error('Error al obtener datos del usuario:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      // Obtener vehículos
+      const vehRes = await api.get(`/users/${usr_id}/vehicles`);
+      console.log('useUserData: Vehículos obtenidos:', vehRes.data);
+      setVehicles(vehRes.data?.data || []);
 
-    fetchUserData();
-  }, []);
+      // Obtener compañías vinculadas
+      const companiesRes = await api.get(`/users/${usr_id}/companies`);
+      console.log('useUserData: Empresas vinculadas:', companiesRes.data);
+      setHasAccess(companiesRes.data.length > 0);
 
-  return { userId, username, vehicles, loading };
+    } catch (err) {
+      console.error('Error al obtener datos del usuario:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchUserData();
+}, []);
+
+  return { userId, username, vehicles, loading, hasAccess };
 }

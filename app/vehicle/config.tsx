@@ -14,7 +14,7 @@ export default function ConfigVehicleScreen() {
   const [color, setColor] = useState('');
   const [placas, setPlacas] = useState('');
 
-  const handleRegister = async () => {
+    const handleRegister = async () => {
     try {
       const usr_id = await SecureStore.getItemAsync('usr_id');
       const token = await SecureStore.getItemAsync('auth_token');
@@ -23,13 +23,12 @@ export default function ConfigVehicleScreen() {
         throw new Error('Sesión no válida. Intenta iniciar sesión nuevamente.');
       }
 
-      // Validación simple
       if (!marca || !modelo || !anio || !color || !placas) {
         Alert.alert('Error', 'Por favor completa todos los campos.');
         return;
       }
 
-      // Registro del vehículo
+      // Registrar vehículo
       const response = await api.post(
         '/vehicles',
         {
@@ -41,27 +40,37 @@ export default function ConfigVehicleScreen() {
           veh_color: color,
         },
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
       console.log('Vehículo registrado:', response.data);
 
       // Actualizar usr_is_configured
-      await api.post(`/configurated/${usr_id}`, {}, {
+      const configResponse = await api.put(`/configurated/${usr_id}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      // Verificamos que la respuesta sea 200 o similar
+      if (configResponse.status !== 200) {
+        throw new Error('No se pudo actualizar la configuración del usuario.');
+      }
 
       Alert.alert('Éxito', 'Vehículo registrado correctamente');
       router.push('/auth/login');
 
     } catch (error: any) {
       console.error('Error al registrar vehículo:', error);
-      Alert.alert('Error', error?.response?.data?.message || error.message || 'Ocurrió un error');
+      if (error?.response?.status === 409) {
+        Alert.alert('Error', 'La placa ya está registrada.');
+      } else if (error?.response?.status === 404) {
+        Alert.alert('Error', 'No se pudo actualizar la configuración del usuario.');
+      } else {
+        Alert.alert('Error', error?.response?.data?.message || error.message || 'Ocurrió un error');
+      }
     }
   };
+
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
