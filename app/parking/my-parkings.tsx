@@ -2,33 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import BottomNav from '../../components/BottomNav';
+import { useUserData } from '../../hooks/useUserData';
 
 export default function MyParkingsScreen() {
   const router = useRouter();
-
-  const parkings = [
-    {
-      nombre: 'Universidad Tecnologica de Torreon',
-      token: 'abcd-1234-xyz',
-      alias: 'UTT',
-      ubicacion: 'Carretera Torreon-Matamoros',
-    },
-    {
-      nombre: 'Milwaukee Tool Torreon',
-      token: 'xyxA-2013-nva',
-      alias: 'MW',
-      ubicacion: 'Boulevard San Pedro',
-    },
-  ];
+  const { companies, loading } = useUserData();
 
   const handleGoToParking = (alias: string) => {
     alert(`Navegar a: ${alias}`);
-    // router.push(`/parking/detail/${alias}`); ← cuando esté disponible
+    // router.push(`/parking/detail/${alias}`); ← en el futuro
   };
 
   const handleDelete = (alias: string) => {
     alert(`Eliminar estacionamiento: ${alias}`);
-    // Aquí podrías integrar lógica para eliminar desde API
+    // Lógica de eliminación con API si aplica
   };
 
   return (
@@ -36,31 +23,26 @@ export default function MyParkingsScreen() {
       <ScrollView>
         <Text style={styles.title}>Tus estacionamientos vinculados</Text>
 
-        {parkings.map((parking, index) => (
-          <View key={index} style={styles.card}>
-            <Text style={styles.parkingName}>{parking.nombre}</Text>
-            <Text style={styles.details}>Token: {parking.token}</Text>
-            <Text style={styles.details}>Alias: {parking.alias}</Text>
-            <Text style={styles.details}>Ubicación: {parking.ubicacion}</Text>
+        {companies.length === 0 ? (
+          <Text style={styles.noDataText}>Aún no tienes estacionamientos vinculados.</Text>
+        ) : (
+          companies.map((parking: any, index: number) => (
+            <View key={index} style={styles.card}>
+              <Text style={styles.parkingName}>{parking.cmp_name}</Text>
+              <Text style={styles.details}>ID de compañia: {parking.cmp_id || 'No definido'}</Text>
 
-            <TouchableOpacity
-              style={styles.goButton}
-              onPress={() => handleGoToParking(parking.alias)}
-            >
-              <Text style={styles.goButtonText}>Ir a este estacionamiento</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.goButton}
+                onPress={() => handleGoToParking(parking.cmp_alias || '')}
+              >
+                <Text style={styles.goButtonText}>Ir a este estacionamiento</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleDelete(parking.alias)}
-            >
-              <Text style={styles.deleteButtonText}>Eliminar</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+            </View>
+          ))
+        )}
       </ScrollView>
 
-      {/* Botón flotante */}
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/parking/add')}>
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
@@ -83,6 +65,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginBottom: 20,
+  },
+  noDataText: {
+    color: '#facc15',
+    textAlign: 'center',
+    marginTop: 30,
+    fontSize: 16,
+    fontWeight: '500',
   },
   card: {
     backgroundColor: '#003366',
