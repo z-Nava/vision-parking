@@ -1,34 +1,21 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
 import { clearSession } from '@/utils/clearSession';
-import { useEffect } from 'react';
+import { useUserData } from '../../hooks/useUserData';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { username, userId, vehicles, companies, loading } = useUserData();
 
   const user = {
-    nombre: 'Usuario',
-    correo: 'usuario@mail.com',
+    nombre: username,
+    correo: `${userId}@example.com`, // Si tienes el correo, actualízalo en el hook
     avatar: require('../../assets/images/react-logo.png'), // Imagen temporal
   };
 
-  const reservacion = {
-    estacionamiento: 'UTT',
-    cajon: 'A1',
-    fechaInicio: '06/17/2025',
-    fechaFin: '06/17/2025',
-  };
-
-  const vehiculos = [
-    { placas: 'DEF-5678', modelo: 'Silverado 2022' },
-    { placas: 'XYZ-9334', modelo: 'Tacoma 2016' },
-  ];
-
-  const handleCancelar = () => {
-    alert('Reservación cancelada (simulada)');
-  };
+  const empresa = companies.length > 0 ? companies[0] : null;
 
   return (
     <View style={styles.container}>
@@ -40,21 +27,16 @@ export default function ProfileScreen() {
           <Text style={styles.email}>{user.correo}</Text>
         </View>
 
-        {/* Reservación */}
-        <Text style={styles.sectionTitle}>Tus reservaciones</Text>
-        <View style={styles.reservationCard}>
-          <Text style={styles.detail}>Estacionamiento: {reservacion.estacionamiento}</Text>
-          <Text style={styles.detail}>Cajon: {reservacion.cajon}</Text>
-          <Text style={styles.detail}>Fecha de inicio: {reservacion.fechaInicio}</Text>
-          <Text style={styles.detail}>Fecha de fin: {reservacion.fechaFin}</Text>
-
-          <TouchableOpacity style={styles.cancelButton} onPress={() => {
-            handleCancelar();
-            router.push('/parking/cancel'); // Regresar a la pantalla principal
-          }}>
-            <Text style={styles.cancelText}>Cancelar reservación</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Empresa */}
+        <Text style={styles.sectionTitle}>Empresa vinculada</Text>
+        {empresa ? (
+          <View style={styles.reservationCard}>
+            <Text style={styles.detail}>Nombre: {empresa.cmp_name}</Text>
+            <Text style={styles.detail}>ID: {empresa.cmp_id || 'N/A'}</Text>
+          </View>
+        ) : (
+          <Text style={styles.noDataText}>No estás vinculado a ninguna empresa.</Text>
+        )}
 
         {/* Vehículos */}
         <View style={styles.vehiculosHeader}>
@@ -64,26 +46,37 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.vehiculosContainer}>
-          {vehiculos.map((v, i) => (
-            <View key={i} style={styles.vehiculoCard}>
-              <Text style={styles.placas}>{v.placas}</Text>
-              <Text style={styles.modelo}>{v.modelo}</Text>
-            </View>
-          ))}
+        {loading ? (
+          <ActivityIndicator size="large" color="#facc15" />
+        ) : vehicles.length === 0 ? (
+          <Text style={styles.noDataText}>No tienes vehículos registrados.</Text>
+        ) : (
+          <View style={styles.vehiculosContainer}>
+            {vehicles.map((v, i) => (
+              <View key={i} style={styles.vehiculoCard}>
+                <Text style={styles.placas}>{v.veh_plate}</Text>
+                <Text style={styles.modelo}>
+                  {v.veh_brand} {v.veh_model} {v.veh_year}
+                </Text>
+                <Text style={styles.modelo}>Color: {v.veh_color}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <TouchableOpacity
-            style={[styles.clearSessionButton, { backgroundColor: '#B22222' }]}
-            onPress={clearSession}
-          >
-            <Text style={styles.clearSessionText}>🧹 Borrar Sesión</Text>
-          </TouchableOpacity>
-        </View>
+          style={[styles.clearSessionButton, { backgroundColor: '#B22222' }]}
+          onPress={clearSession}
+        >
+          <Text style={styles.clearSessionText}>🧹 Cerrar sesión</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <BottomNav />
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -191,5 +184,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  noDataText: {
+  color: '#ccc',
+  fontStyle: 'italic',
+  marginBottom: 15,
+  textAlign: 'center',
+},
+
 
 });
