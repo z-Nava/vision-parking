@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import BottomNav from '../../components/BottomNav';
+import * as SecureStore from 'expo-secure-store';
+import api from '../../services/api';
 
 export default function AddVehicleScreen() {
   const [marca, setMarca] = useState('');
@@ -8,37 +10,79 @@ export default function AddVehicleScreen() {
   const [anio, setAnio] = useState('');
   const [color, setColor] = useState('');
   const [placas, setPlacas] = useState('');
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleSaveVehicle = () => {
-    if (marca && modelo && anio && color && placas) {
-      alert('Vehículo guardado (simulado)');
-      // Aquí conectas con tu servicio de API
-    } else {
-      alert('Completa todos los campos');
+  useEffect(() => {
+    const fetchVehiculos = async () => {
+      try {
+        const usr_id = await SecureStore.getItemAsync('usr_id');
+        if (!usr_id) return;
+
+        const res = await api.get(`/users/${usr_id}/vehicles`);
+        setVehiculos(res.data.data || []);
+      } catch (error) {
+        console.error('Error al obtener vehículos:', error);
+      }
+    };
+
+    fetchVehiculos();
+  }, []);
+
+  const handleSaveVehicle = async () => {
+    if (!marca || !modelo || !anio || !color || !placas) {
+      return Alert.alert('Campos incompletos', 'Por favor completa todos los campos');
+    }
+
+    try {
+      const usr_id = await SecureStore.getItemAsync('usr_id');
+      if (!usr_id) throw new Error('Usuario no autenticado');
+
+      setLoading(true);
+
+      await api.post('/vehicles', {
+        usr_id,
+        veh_plate: placas,
+        veh_brand: marca,
+        veh_model: modelo,
+        veh_year: Number(anio),
+        veh_color: color
+      });
+
+      Alert.alert('Éxito', 'Vehículo guardado correctamente');
+
+      // Limpiar formulario
+      setMarca('');
+      setModelo('');
+      setAnio('');
+      setColor('');
+      setPlacas('');
+
+      // Recargar vehículos
+      const res = await api.get(`/users/${usr_id}/vehicles`);
+      setVehiculos(res.data.data || []);
+    } catch (error: any) {
+      console.error('Error al guardar vehículo:', error);
+      Alert.alert('Error', error?.response?.data?.message || 'No se pudo guardar el vehículo');
+    } finally {
+      setLoading(false);
     }
   };
-
-  const vehiculos = [
-    { placas: 'DEF-5678', modelo: 'Silverado 2022' },
-    { placas: 'XYZ-9334', modelo: 'Tacoma 2016' },
-  ];
 
   return (
     <View style={styles.container}>
       <ScrollView>
 
-        {/* Mis vehículos */}
         <Text style={styles.sectionTitle}>Mis vehículos</Text>
         <View style={styles.vehiculosContainer}>
           {vehiculos.map((v, index) => (
             <View key={index} style={styles.vehiculoCard}>
-              <Text style={styles.placas}>{v.placas}</Text>
-              <Text style={styles.modelo}>{v.modelo}</Text>
+              <Text style={styles.placas}>{v.veh_plate}</Text>
+              <Text style={styles.modelo}>{`${v.veh_brand} ${v.veh_model}`}</Text>
             </View>
           ))}
         </View>
 
-        {/* Formulario */}
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Agregar nuevo vehículo</Text>
           <Text style={styles.formSubtitle}>Solo tienes un límite de 4 vehículos</Text>
@@ -80,8 +124,8 @@ export default function AddVehicleScreen() {
             onChangeText={setPlacas}
           />
 
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveVehicle}>
-            <Text style={styles.saveButtonText}>Guardar vehículo</Text>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveVehicle} disabled={loading}>
+            <Text style={styles.saveButtonText}>{loading ? 'Guardando...' : 'Guardar vehículo'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

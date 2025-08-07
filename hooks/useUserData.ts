@@ -22,7 +22,7 @@ export function useUserData() {
         setUserId(usr_id);
 
         // Obtener info del usuario (nombre)
-        const userRes = await api.get(`/users/${usr_id}`);
+        const userRes = await api.get(`/info/${usr_id}`);
         console.log('useUserData: Datos del usuario obtenidos:', userRes.data);
         setUsername(userRes.data?.usr_name || 'Usuario');
         console.log('useUserData: Nombre de usuario establecido:', userRes.data?.usr_name || 'Usuario');
