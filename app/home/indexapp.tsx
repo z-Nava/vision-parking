@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
+import { useUserData } from '../../hooks/useUserData';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { username, vehicles, loading } = useUserData();
 
   const cajones = [
     { id: 'A1', estado: 'Disponible', color: '#2ecc71', reservable: false },
@@ -14,16 +16,19 @@ export default function HomeScreen() {
     { id: 'A5', estado: 'Reservado', color: '#34495e', reservable: false },
   ];
 
-  const vehiculos = [
-    { placas: 'DEF-5678', modelo: 'Silverado 2022' },
-    { placas: 'XYZ-9334', modelo: 'Tacoma 2016' },
-  ];
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#FACC15" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView>
         <Text style={styles.title}>VisionParking</Text>
-        <Text style={styles.welcome}>Hola! <Text style={styles.username}>Usuario</Text></Text>
+        <Text style={styles.welcome}>Hola! <Text style={styles.username}>{username}</Text></Text>
 
         {/* Cajones disponibles */}
         <Text style={styles.sectionTitle}>Cajones disponibles</Text>
@@ -50,10 +55,10 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.vehiculosContainer}>
-          {vehiculos.map((vehiculo, index) => (
+          {vehicles.map((vehiculo, index) => (
             <View key={index} style={styles.vehiculoCard}>
-              <Text style={styles.placas}>{vehiculo.placas}</Text>
-              <Text style={styles.modelo}>{vehiculo.modelo}</Text>
+              <Text style={styles.placas}>{vehiculo.veh_plate}</Text>
+              <Text style={styles.modelo}>{vehiculo.veh_model} {vehiculo.veh_year}</Text>
             </View>
           ))}
         </View>
@@ -63,6 +68,9 @@ export default function HomeScreen() {
     </View>
   );
 }
+
+// styles: sin cambios...
+
 
 const styles = StyleSheet.create({
   container: {

@@ -28,16 +28,27 @@ export default function VerifyCodeScreen() {
 
       if (!token) throw new Error('Token no recibido');
 
-      console.log('Token recibido:', token);
+      console.log('VERIFY-CODE: Token recibido:', token);
       await SecureStore.setItemAsync('auth_token', token); // 🔐 Guardamos el token
-      console.log('Token guardado en SecureStore', token);
-      console.log('ID de usuario conservado en SecureStore:', usr_id);
+      // ... después de guardar el token y el usr_id
+      const configResponse = await api.get(`/configurated/${usr_id}`);
+      const isConfigured = configResponse.data?.isConfigurated === true;
+      console.log('VERIFY-CODE: Respuesta de configurated:', configResponse.data);
+      console.log('VERIFY-CODE: Token guardado en SecureStore', token);
+      console.log('VERIFY-CODE: ID de usuario conservado en SecureStore:', usr_id);
 
       setToken(token);
-      router.push('/parking/available');
+      console.log('VERIFY-CODE: Verificación exitosa, redirigiendo...');
+      if (isConfigured) {
+        console.log('VERIFY-CODE: Usuario ya configurado, redirigiendo a /home/indexapp');
+        router.push('/home/indexapp'); // Ya tiene todo listo
+      } else {
+        console.log('VERIFY-CODE: Usuario no configurado, redirigiendo a /vehicle/config');
+        router.push('/parking/available'); // Falta completar la configuración
+      }
     } catch (err: any) {
       const apiMessage = err?.response?.data?.message || err?.message || 'Error desconocido';
-      console.log('Error al verificar:', apiMessage);
+      console.log('VERIFY-CODE: Error al verificar:', apiMessage);
       setError('AUTH002');
       setDetail(apiMessage);
     }

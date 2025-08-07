@@ -1,6 +1,9 @@
+// app/vehicle/config.tsx
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import api from '../../services/api';
 
 export default function ConfigVehicleScreen() {
   const router = useRouter();
@@ -11,21 +14,57 @@ export default function ConfigVehicleScreen() {
   const [color, setColor] = useState('');
   const [placas, setPlacas] = useState('');
 
-  const handleRegister = () => {
-    console.log({
-      marca,
-      modelo,
-      anio,
-      color,
-      placas
-    });
-    alert('Vehículo registrado (simulado)');
-    // En un futuro: enviar estos datos a tu API
+  const handleRegister = async () => {
+    try {
+      const usr_id = await SecureStore.getItemAsync('usr_id');
+      const token = await SecureStore.getItemAsync('auth_token');
+
+      if (!usr_id || !token) {
+        throw new Error('Sesión no válida. Intenta iniciar sesión nuevamente.');
+      }
+
+      // Validación simple
+      if (!marca || !modelo || !anio || !color || !placas) {
+        Alert.alert('Error', 'Por favor completa todos los campos.');
+        return;
+      }
+
+      // Registro del vehículo
+      const response = await api.post(
+        '/vehicles',
+        {
+          usr_id,
+          veh_plate: placas,
+          veh_brand: marca,
+          veh_model: modelo,
+          veh_year: parseInt(anio),
+          veh_color: color,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log('Vehículo registrado:', response.data);
+
+      // Actualizar usr_is_configured
+      await api.post(`/configurated/${usr_id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      Alert.alert('Éxito', 'Vehículo registrado correctamente');
+      router.push('/auth/login');
+
+    } catch (error: any) {
+      console.error('Error al registrar vehículo:', error);
+      Alert.alert('Error', error?.response?.data?.message || error.message || 'Ocurrió un error');
+    }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Logo temporal */}
       <Image source={require('../../assets/images/react-logo.png')} style={styles.logo} />
 
       <Text style={styles.title}>Configura un vehículo</Text>
@@ -55,7 +94,7 @@ export default function ConfigVehicleScreen() {
       />
       <TextInput
         style={styles.input}
-        placeholder="Color del vehículo"
+        placeholder="Color del vehículo (ej. #1F4E79)"
         placeholderTextColor="#666"
         value={color}
         onChangeText={setColor}
@@ -68,10 +107,7 @@ export default function ConfigVehicleScreen() {
         onChangeText={setPlacas}
       />
 
-      <TouchableOpacity style={styles.button} onPress={() => {
-                handleRegister(); // Si quieres seguir mostrando el alert del archivo...
-                router.push('/auth/login'); // Navegación a la siguiente pantalla
-            }}>
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
         <Text style={styles.buttonText}>Registrar vehículo</Text>
       </TouchableOpacity>
     </ScrollView>
