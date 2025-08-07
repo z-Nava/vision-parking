@@ -73,7 +73,7 @@ export default function AddParking() {
         'Content-Type': 'multipart/form-data',
       },
     });
-
+    
     console.log('Archivo subido correctamente:', uploadResponse.data);
     Alert.alert('Éxito', 'Solicitud enviada y archivo cargado correctamente.');
     router.push('/vehicle/config');

@@ -32,7 +32,7 @@ export default function HomeScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Disponible': return '#2ecc71';
+      case 'Activo': return '#2ecc71';
       case 'Reservado': return '#34495e';
       case 'Ocupado': return '#c0392b';
       case 'Inactivo': return '#7f8c8d';

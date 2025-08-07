@@ -43,7 +43,7 @@ export default function MyParkingsScreen() {
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/parking/add')}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/parking/add-parkings')}>
         <Text style={styles.fabText}>＋</Text>
       </TouchableOpacity>
 

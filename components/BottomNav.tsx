@@ -11,7 +11,7 @@ export default function BottomNav() {
       <TouchableOpacity onPress={() => router.push('/home/indexapp')}>
         <Text style={styles.navIcon}>🏠</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => router.push('/parking/my-parkings')}>
+      <TouchableOpacity onPress={() => router.push('/parking/show-parking')}>
         <Text style={styles.navIcon}>🅿️</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => router.push('/profile/indexuser')}>
