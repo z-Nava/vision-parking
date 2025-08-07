@@ -1,21 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
 import { useUserData } from '../../hooks/useUserData';
+import * as SecureStore from 'expo-secure-store';
+import api from '../../services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { username, vehicles, loading, hasAccess } = useUserData();
-  
+  const { username, vehicles, loading, hasAccess, companies, companyName} = useUserData();
+  const [parkingLots, setParkingLots] = useState<any[]>([]);
 
-  const cajones = [
-    { id: 'A1', estado: 'Disponible', color: '#2ecc71', reservable: false },
-    { id: 'A2', estado: 'Disponible', color: '#2ecc71', reservable: true },
-    { id: 'A3', estado: 'Ocupado', color: '#c0392b', reservable: false },
-    { id: 'A4', estado: 'Disponible', color: '#2ecc71', reservable: true },
-    { id: 'A5', estado: 'Reservado', color: '#34495e', reservable: false },
-  ];
+  useEffect(() => {
+    const fetchParkingLots = async () => {
+      if (companies.length > 0) {
+        const cmp_id = companies[0].cmp_id;
+        try {
+          const token = await SecureStore.getItemAsync('auth_token');
+          const res = await api.get(`/companies/${cmp_id}/parking-lots`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setParkingLots(res.data || []);
+        } catch (err) {
+          console.error('Error al obtener cajones:', err);
+        }
+      }
+    };
+
+    fetchParkingLots();
+  }, [companies]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Disponible': return '#2ecc71';
+      case 'Reservado': return '#34495e';
+      case 'Ocupado': return '#c0392b';
+      case 'Inactivo': return '#7f8c8d';
+      default: return '#bdc3c7';
+    }
+  };
 
   if (loading) {
     return (
@@ -30,26 +53,31 @@ export default function HomeScreen() {
       <ScrollView>
         <Text style={styles.title}>VisionParking</Text>
         <Text style={styles.welcome}>Hola! <Text style={styles.username}>{username}</Text></Text>
+        <Text style={styles.company}>Compañia: <Text style={styles.companyName}>{companyName}</Text></Text>
         {!hasAccess && (
-              <View style={styles.alertBox}>
-                <Text style={styles.alertText}>
-                  Aún no se te ha asignado acceso a ningún estacionamiento. Espera a que un administrador apruebe tu solicitud.
-                </Text>
-              </View>
-            )}
-        {/* Cajones disponibles */}
-        
-        <Text style={styles.sectionTitle}>Cajones disponibles</Text>
-        {cajones.map((cajon, index) => (
-          <View key={index} style={styles.cajonCard}>
-            <View>
-              <Text style={styles.cajonNombre}>Cajon {cajon.id}</Text>
-              {cajon.reservable && (
-                <Text style={styles.reservableText}>Disponible reservación!</Text>
-              )}
-            </View>
-            <View style={[styles.estado, { backgroundColor: cajon.color }]}>
-              <Text style={styles.estadoText}>{cajon.estado}</Text>
+          <View style={styles.alertBox}>
+            <Text style={styles.alertText}>
+              Aún no se te ha asignado acceso a ningún estacionamiento. Espera a que un administrador apruebe tu solicitud.
+            </Text>
+          </View>
+        )}
+
+        {hasAccess && parkingLots.map((lot, idx) => (
+          <View key={idx}>
+            <Text style={styles.sectionTitle}>Estacionamiento: {lot.pkl_name}</Text>
+            <View style={styles.cajonesContainer}>
+              <ScrollView style={styles.cajonesScroll}>
+                {lot.parking_spots.map((spot: any, index: number) => (
+                  <View key={index} style={styles.cajonCard}>
+                    <View>
+                      <Text style={styles.cajonNombre}>Cajón {spot.pks_number}</Text>
+                    </View>
+                    <View style={[styles.estado, { backgroundColor: getStatusColor(spot.status?.stu_name) }]}>
+                      <Text style={styles.estadoText}>{spot.status?.stu_name}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           </View>
         ))}
@@ -76,9 +104,6 @@ export default function HomeScreen() {
     </View>
   );
 }
-
-// styles: sin cambios...
-
 
 const styles = StyleSheet.create({
   container: {
@@ -190,5 +215,28 @@ const styles = StyleSheet.create({
   fontWeight: '600',
   textAlign: 'center',
 },
+cajonesContainer: {
+  maxHeight: 300,
+  marginBottom: 20,
+  borderRadius: 10,
+  overflow: 'hidden',
+},
+cajonesScroll: {
+  backgroundColor: '#001A3D',
+  borderRadius: 10,
+  padding: 10,
+},
+company: {
+  fontSize: 16,
+  color: 'white',
+  marginBottom: 10,
+},
+
+companyName: {
+  color: '#FACC15',
+  fontWeight: 'bold',
+}
+
+
 
 });
