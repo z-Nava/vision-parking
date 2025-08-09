@@ -38,6 +38,18 @@ export function mapApiErrorToForm<T extends FieldValues>(
     setError("cma_description" as Path<T>, { message: message ?? "Ya existe una solicitud pendiente" });
     return true;
   }
+  if (code === "VAL011") {
+  setError("veh_plate" as any, { message: message ?? "Formato de placa inválido" });
+  return true;
+  }
+  if (code === "LNG011") {
+    setError("veh_plate" as any, { message: message ?? "Placa ya registrada" });
+    return true;
+  }
+  if (code === "LNG027") {
+    // Límite de vehículos alcanzado → error global
+    return false;
+  }
 
   // Otros códigos → que el caller muestre alerta global
   return false;
