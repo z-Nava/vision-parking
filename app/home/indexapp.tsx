@@ -71,10 +71,29 @@ export default function HomeScreen() {
                   <View key={index} style={styles.cajonCard}>
                     <View>
                       <Text style={styles.cajonNombre}>Cajón {spot.pks_number}</Text>
+                      <Text style={[styles.estadoText, { color: getStatusColor(spot.status?.stu_name) }]}>
+                        {spot.status?.stu_name}
+                      </Text>
                     </View>
-                    <View style={[styles.estado, { backgroundColor: getStatusColor(spot.status?.stu_name) }]}>
-                      <Text style={styles.estadoText}>{spot.status?.stu_name}</Text>
-                    </View>
+
+                    {spot.status?.stu_name === 'Activo' ? (
+                      <TouchableOpacity
+                        style={styles.reservarButton}
+                        onPress={() => router.push({
+                          pathname: '/parking/schedule',
+                          params: {
+                            pks_id: spot.pks_id,
+                            cmp_id: lot.cmp_id,
+                            pkl_id: lot.pkl_id,
+                            pks_number: spot.pks_number,
+                          },
+                        })}
+                      >
+                        <Text style={styles.reservarText}>Reservar</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={[styles.estadoText, { fontStyle: 'italic' }]}>No disponible</Text>
+                    )}
                   </View>
                 ))}
               </ScrollView>
@@ -106,6 +125,19 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+    reservarButton: {
+    backgroundColor: '#FACC15',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  reservarText: {
+    color: '#00224D',
+    fontWeight: 'bold',
+  },
   container: {
     flex: 1,
     backgroundColor: '#00224D',

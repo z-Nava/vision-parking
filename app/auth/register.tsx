@@ -1,8 +1,7 @@
 // app/auth/register.tsx
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import axios from 'axios';
+import React, { useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import AlertBox from '../../components/AlertBox';
 import { register } from '../../services/authService';
 
@@ -24,7 +23,9 @@ export default function RegisterScreen() {
     setError('');
     router.push('/auth/login');
   } catch (err: any) {
+    console.log({err})
     console.error('Error completo:', err); // 🔍 <--- agrega este log
+    
     const apiMessage =
       err?.response?.data?.message ||
       err?.message ||
