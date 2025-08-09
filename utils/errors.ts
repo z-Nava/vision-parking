@@ -25,6 +25,11 @@ export function mapApiErrorToForm<T extends FieldValues>(
     setError("usr_name" as Path<T>, { message: message ?? "Usuario ya existe" });
     return true;
   }
+  if (code === "AUTH001") {
+    // credenciales incorrectas → lo pegamos en password
+    setError("usr_password" as Path<T>, { message: message ?? "Credenciales incorrectas" });
+    return true;
+  }
 
   // Otros códigos → que el caller muestre alerta global
   return false;

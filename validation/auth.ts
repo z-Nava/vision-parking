@@ -26,4 +26,22 @@ export const registerSchema = z.object({
     }),
 });
 
+export const signinSchema = z.object({
+  usr_email: z
+    .string()
+    .trim()
+    .email("Correo inválido")
+    .min(10, "Mínimo 10 caracteres")
+    .max(45, "Máximo 45 caracteres"),
+  usr_password: z
+    .string()
+    .min(12, "Mínimo 12 caracteres")
+    .max(32, "Máximo 32 caracteres")
+    .refine((v) => PASSWORD_REGEX.test(v), {
+      message:
+        "Debe incluir minúscula, mayúscula, número y símbolo (@$!%*?&), longitud 12–32",
+    }),
+});
+
 export type RegisterForm = z.infer<typeof registerSchema>;
+export type SigninForm = z.infer<typeof signinSchema>;
