@@ -1,17 +1,33 @@
+// app/parking/add.tsx
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AlertBox from '../../components/AlertBox';
 import BottomNav from '../../components/BottomNav';
-import api from '../../services/api';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { accessRequestSchema, type AccessRequestForm } from '../../validation/parking';
+import { createAccessRequest, uploadAccessFile } from '../../services/parkingService';
+import { mapApiErrorToForm } from '../../utils/errors';
 
 export default function AddParking() {
   const router = useRouter();
   const { cmp_id, cmp_name } = useLocalSearchParams();
 
-  const [motivo, setMotivo] = useState('');
-  const [file, setFile] = useState<any>(null);
+  const cmpId = Array.isArray(cmp_id) ? cmp_id[0] : (cmp_id as string | undefined);
+  const companyName = Array.isArray(cmp_name) ? cmp_name[0] : (cmp_name as string | undefined);
+
+  const { control, handleSubmit, setValue, trigger, setError, formState: { errors, isSubmitting } } =
+    useForm<AccessRequestForm>({
+      resolver: zodResolver(accessRequestSchema),
+      defaultValues: { cma_description: '', file: undefined as any },
+      mode: 'onBlur',
+      reValidateMode: 'onChange',
+    });
+
+  const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
 
   const handleFilePick = async () => {
     try {
@@ -21,96 +37,92 @@ export default function AddParking() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        const selected = result.assets[0];
-        setFile(selected);
+        const selected = result.assets[0]; // { uri, name, size, mimeType }
+        setValue('file', selected, { shouldValidate: true });
+        await trigger('file');
         Alert.alert('Archivo seleccionado', selected.name);
-      } else {
-        Alert.alert('No se seleccionó ningún archivo.');
       }
     } catch (error) {
       console.error('Error al seleccionar archivo:', error);
+      Alert.alert('Error', 'No se pudo seleccionar el archivo.');
     }
   };
 
-  const handleSubmit = async () => {
-  if (!file) {
-    Alert.alert('Archivo requerido', 'Por favor selecciona un archivo.');
-    return;
-  }
+  const onSubmit = async (data: AccessRequestForm) => {
+    setServerErr(null);
 
-  if (!motivo.trim()) {
-    Alert.alert('Campo requerido', 'Por favor ingresa un motivo.');
-    return;
-  }
+    if (!cmpId) {
+      setServerErr({ code: 'VAL001', message: 'Falta el identificador de compañía (cmp_id)' });
+      return;
+    }
 
-  try {
-    const usr_id = await SecureStore.getItemAsync('usr_id');
-    if (!usr_id) throw new Error('ID de usuario no encontrado.');
+    try {
+      const usr_id = await SecureStore.getItemAsync('usr_id');
+      if (!usr_id) throw new Error('ID de usuario no encontrado.');
 
-    // 1. Enviar solicitud de acceso
-    const {data} = await api.post('/company-access-requests', {
-      usr_id,
-      cmp_id,
-      cma_description: motivo,
-    });
-    console.log('Solicitud de acceso enviada:', data);
-    const cma_id = data.data?.cma_id;
-    if (!cma_id) throw new Error('No se recibió el ID de la solicitud.');
+      // 1) Crear solicitud
+      const reqRes = await createAccessRequest(usr_id, cmpId, data.cma_description.trim());
+      const cma_id = reqRes?.data?.cma_id ?? reqRes?.cma_id;
+      if (!cma_id) throw new Error('No se recibió el ID de la solicitud.');
 
-    console.log('Solicitud creada, cma_id:', cma_id);
+      // 2) Subir archivo
+      await uploadAccessFile(data.file, String(cma_id));
 
-    // 2. Subir archivo con el fil_relation_id (relación a la solicitud)
-    const formData = new FormData();
-    formData.append('file', {
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType || 'application/octet-stream',
-    } as any);
-    formData.append('fil_relation_id', String(cma_id)); // Muy importante
-
-    const uploadResponse = await api.post('/files/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    
-    console.log('Archivo subido correctamente:', uploadResponse.data);
-    Alert.alert('Éxito', 'Solicitud enviada y archivo cargado correctamente.');
-    router.push('/vehicle/config');
-
-  } catch (error: any) {
-    console.error('Error en la solicitud:', error?.response?.data || error.message);
-    Alert.alert('Error', 'Ocurrió un problema al enviar la solicitud o subir el archivo.');
-  }
-};
-
+      Alert.alert('Éxito', 'Solicitud enviada y archivo cargado correctamente.');
+      router.push('/vehicle/config');
+    } catch (err: any) {
+      const mapped = mapApiErrorToForm<AccessRequestForm>(err, setError);
+      if (!mapped) {
+        setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
+      } else {
+        // Si pegamos al campo y quieres además un toast, puedes agregarlo aquí
+      }
+    }
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Agregar nuevo estacionamiento</Text>
 
+      {serverErr && (
+        <AlertBox type="error" code={serverErr.code} message={serverErr.message} detail={serverErr.detail} />
+      )}
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Solicitar acceso a:</Text>
-        <Text style={styles.subtext}>{cmp_name}</Text>
+        <Text style={styles.subtext}>{companyName || 'Compañía'}</Text>
 
         <Text style={styles.instructions}>1. Selecciona un archivo (PDF, PNG o JPG)</Text>
         <TouchableOpacity style={styles.saveButton} onPress={handleFilePick}>
           <Text style={styles.saveButtonText}>Seleccionar archivo</Text>
         </TouchableOpacity>
+        {errors.file?.message ? <Text style={styles.errorText}>{String(errors.file.message)}</Text> : null}
 
         <Text style={styles.instructions}>2. Ingresa el motivo de tu solicitud</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ejemplo: Soy estudiante y necesito acceso diario"
-          placeholderTextColor="#888"
-          multiline
-          numberOfLines={4}
-          value={motivo}
-          onChangeText={setMotivo}
-        />
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSubmit}>
-          <Text style={styles.saveButtonText}>Guardar solicitud</Text>
+        <Controller
+          control={control}
+          name="cma_description"
+          render={({ field: { value, onChange, onBlur } }) => (
+            <TextInput
+              style={styles.input}
+              placeholder="Ejemplo: Soy estudiante y necesito acceso diario"
+              placeholderTextColor="#888"
+              multiline
+              numberOfLines={4}
+              value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
+              textAlignVertical="top"
+            />
+          )}
+        />
+        {errors.cma_description?.message ? (
+          <Text style={styles.errorText}>{errors.cma_description.message}</Text>
+        ) : null}
+
+        <TouchableOpacity style={styles.saveButton} onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
+          <Text style={styles.saveButtonText}>{isSubmitting ? 'Enviando...' : 'Guardar solicitud'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -119,72 +131,21 @@ export default function AddParking() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#00224D',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 80,
+    flex: 1, backgroundColor: '#00224D',
+    paddingHorizontal: 20, paddingTop: 60, paddingBottom: 80,
   },
-  title: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 20,
-  },
-  card: {
-    backgroundColor: '#FFCC00',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#00224D',
-    marginBottom: 5,
-    textAlign: 'center',
-  },
-  subtext: {
-    fontWeight: '600',
-    color: '#00224D',
-    marginBottom: 10,
-  },
-  instructions: {
-    color: '#00224D',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
+  title: { color: 'white', fontSize: 20, fontWeight: '600', marginBottom: 20 },
+  card: { backgroundColor: '#FFCC00', borderRadius: 12, padding: 20, alignItems: 'center' },
+  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#00224D', marginBottom: 5, textAlign: 'center' },
+  subtext: { fontWeight: '600', color: '#00224D', marginBottom: 10 },
+  instructions: { color: '#00224D', textAlign: 'center', marginBottom: 10 },
   input: {
-    width: '100%',
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 10,
-    color: '#00224D',
-    marginBottom: 15,
-    textAlignVertical: 'top',
+    width: '100%', backgroundColor: 'white', borderRadius: 8, padding: 10, color: '#00224D',
+    marginBottom: 6, textAlignVertical: 'top', borderWidth: 1, borderColor: '#D1D5DB'
   },
-  fileButton: {
-    backgroundColor: '#00224D',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    marginBottom: 20,
-  },
-  fileButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: '#00224D',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 8,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
+  errorText: { color: '#b71c1c', marginBottom: 10, fontSize: 12, alignSelf: 'flex-start' },
+  saveButton: { backgroundColor: '#00224D', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 8, marginTop: 6 },
+  saveButtonText: { color: 'white', fontWeight: '600' },
 });

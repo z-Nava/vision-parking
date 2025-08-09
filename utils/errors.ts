@@ -34,6 +34,10 @@ export function mapApiErrorToForm<T extends FieldValues>(
     setError("cod_code" as Path<T>, { message: message ?? "Código inválido o expirado" });
     return true;
   }
+  if (code === "LNG025") { // ya existe una solicitud pendiente
+    setError("cma_description" as Path<T>, { message: message ?? "Ya existe una solicitud pendiente" });
+    return true;
+  }
 
   // Otros códigos → que el caller muestre alerta global
   return false;
