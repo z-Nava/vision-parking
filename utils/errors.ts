@@ -30,6 +30,10 @@ export function mapApiErrorToForm<T extends FieldValues>(
     setError("usr_password" as Path<T>, { message: message ?? "Credenciales incorrectas" });
     return true;
   }
+   if (code === "AUTH011" || code === "AUTH012" || code === "AUTH013") {
+    setError("cod_code" as Path<T>, { message: message ?? "Código inválido o expirado" });
+    return true;
+  }
 
   // Otros códigos → que el caller muestre alerta global
   return false;

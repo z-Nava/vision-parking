@@ -43,5 +43,14 @@ export const signinSchema = z.object({
     }),
 });
 
+export const verifyCodeSchema = z.object({
+  cod_code: z
+    .string()
+    .trim()
+    .min(6, "Debe tener 6 dígitos").max(6, "Debe tener 6 dígitos")
+    .regex(/^\d+$/, "Solo números"),
+});
+
 export type RegisterForm = z.infer<typeof registerSchema>;
+export type VerifyCodeForm = z.infer<typeof verifyCodeSchema>;
 export type SigninForm = z.infer<typeof signinSchema>;
