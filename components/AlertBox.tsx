@@ -7,7 +7,7 @@ type AlertType = 'error' | 'success' | 'info' | 'warning';
 interface AlertBoxProps {
   type?: AlertType;
   code?: string;
-  message: string;
+  message?: string;
   detail?: string;
 }
 
