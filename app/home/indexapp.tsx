@@ -1,41 +1,63 @@
-import React, { useEffect, useState, useMemo } from 'react';
+// app/home/indexapp.tsx
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserData } from '../../hooks/useUserData';
 import * as SecureStore from 'expo-secure-store';
 import api from '../../services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { username, vehicles, loading, hasAccess, companies, companyName } = useUserData();
+  const { username, vehicles, loading, hasAccess, companies } = useUserData();
 
+  // params desde show-parking (opcional)
+  const params = useLocalSearchParams();
+  const cmpIdFromNav = Array.isArray(params?.cmp_id) ? params.cmp_id[0] : (params?.cmp_id as string | undefined);
+  const cmpNameFromNav = Array.isArray(params?.cmp_name) ? params.cmp_name[0] : (params?.cmp_name as string | undefined);
+
+  const [activeCmpId, setActiveCmpId] = useState<string | null>(null);
+  const [activeCmpName, setActiveCmpName] = useState<string | null>(null);
+
+  // lista de cajones
   const [parkingLots, setParkingLots] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
   // acceso local para ocultar alerta en cuanto el backend te acepte
   const [localHasAccess, setLocalHasAccess] = useState<boolean>(hasAccess);
+  useEffect(() => setLocalHasAccess(hasAccess), [hasAccess]);
 
+  // decide compañía activa: 1) params, 2) primera del hook
   useEffect(() => {
-    setLocalHasAccess(hasAccess);
-  }, [hasAccess]);
+    if (cmpIdFromNav) {
+      setActiveCmpId(cmpIdFromNav);
+      setActiveCmpName(cmpNameFromNav || null);
+    } else {
+      const first = companies?.[0];
+      setActiveCmpId(first?.cmp_id ?? null);
+      setActiveCmpName(first?.cmp_name ?? null);
+    }
+  }, [cmpIdFromNav, cmpNameFromNav, companies]);
 
-  const cmpId = useMemo(() => (companies?.[0]?.cmp_id ?? null), [companies]);
-
-  const fetchParkingLots = async () => {
-    if (!cmpId) return;
+  const fetchParkingLots = useCallback(async () => {
+    if (!activeCmpId) return;
     try {
       const token = await SecureStore.getItemAsync('auth_token');
-      const res = await api.get(`/companies/${cmpId}/parking-lots`, {
+      const res = await api.get(`/companies/${activeCmpId}/parking-lots`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-    
       const lots = res?.data?.data ?? res?.data ?? [];
-      console.log('Cajones obtenidos:', lots);
+      console.log('Cajones obtenidos de', activeCmpId, lots);
       setParkingLots(lots);
     } catch (err) {
       console.error('Error al obtener cajones:', err);
     }
-  };
+  }, [activeCmpId]);
+
+  // cargar cajones cuando cambie la compañía activa
+  useEffect(() => {
+    fetchParkingLots();
+  }, [fetchParkingLots]);
 
   const handleRefreshAccess = async () => {
     try {
@@ -64,10 +86,6 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchParkingLots();
-  }, [cmpId]);
-
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'Activo': return '#2ecc71';
@@ -91,7 +109,13 @@ export default function HomeScreen() {
       <ScrollView>
         <Text style={styles.title}>VisionParking</Text>
         <Text style={styles.welcome}>Hola! <Text style={styles.username}>{username}</Text></Text>
-        <Text style={styles.company}>Compañia: <Text style={styles.companyName}>{companyName}</Text></Text>
+
+        {/* Compañía activa + cambiar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <Text style={styles.company}>
+            Compañia: <Text style={styles.companyName}>{activeCmpName || 'Sin compañía'}</Text>
+          </Text>
+        </View>
 
         {!localHasAccess && (
           <View style={styles.alertBox}>

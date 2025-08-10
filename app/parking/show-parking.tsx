@@ -8,9 +8,11 @@ export default function MyParkingsScreen() {
   const router = useRouter();
   const { companies, loading } = useUserData();
 
-  const handleGoToParking = (alias: string) => {
-    alert(`Navegar a: ${alias}`);
-    // router.push(`/parking/detail/${alias}`); ← en el futuro
+  const handleGoToParking = (cmp_id: string, cmp_name: string) => {
+    router.push({
+    pathname: '/home/indexapp',
+    params: { cmp_id, cmp_name, t: Date.now().toString() }, // t fuerza refresco
+  });
   };
 
   const handleDelete = (alias: string) => {
@@ -33,11 +35,10 @@ export default function MyParkingsScreen() {
 
               <TouchableOpacity
                 style={styles.goButton}
-                onPress={() => handleGoToParking(parking.cmp_alias || '')}
+                onPress={() => handleGoToParking(parking.cmp_id, parking.cmp_name)}
               >
-                <Text style={styles.goButtonText}>Ir a este estacionamiento</Text>
+                <Text style={styles.goButtonText}>Usar este estacionamiento</Text>
               </TouchableOpacity>
-
             </View>
           ))
         )}
