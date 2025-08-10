@@ -6,6 +6,7 @@ import api from '../services/api';
 export function useUserData() {
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string>(''); 
+  const [email, setEmail] = useState<string>(''); 
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
@@ -27,6 +28,8 @@ export function useUserData() {
         // Obtener info del usuario (nombre)
         const userRes = await api.get(`/info/${usr_id}`);
         setUsername(userRes.data?.usr_name || 'Usuario');
+        setEmail(userRes.data?.usr_email || ''); 
+
 
         // Obtener vehículos
         const vehRes = await api.get(`/users/${usr_id}/vehicles`);
@@ -57,6 +60,7 @@ export function useUserData() {
   return {
     userId,
     username,
+    email,
     vehicles,
     loading,
     hasAccess,

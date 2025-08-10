@@ -7,11 +7,11 @@ import { useUserData } from '../../hooks/useUserData';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { username, userId, vehicles, companies, loading } = useUserData();
+  const { username, email, userId, vehicles, companies, loading } = useUserData();
 
   const user = {
     nombre: username,
-    correo: `${userId}@example.com`, // Si tienes el correo, actualízalo en el hook
+    correo: email || 'Correo no disponible',
     avatar: require('../../assets/images/react-logo.png'), // Imagen temporal
   };
 
