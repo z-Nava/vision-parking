@@ -1,4 +1,3 @@
-// app/auth/login.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -44,12 +43,15 @@ export default function LoginScreen() {
   }, [register]);
 
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]); // ⬅️ errores de validación en array
 
   // ref para mover foco a password desde email
   const passRef = useRef<TextInput>(null);
 
   const onSubmit = async (data: SigninForm) => {
     setServerErr(null);
+    setValidationErrors([]); // limpiar antes de enviar
+
     const email = data.usr_email.trim().toLowerCase();
     const password = data.usr_password;
 
@@ -64,8 +66,20 @@ export default function LoginScreen() {
 
       router.push('/auth/verify-code');
     } catch (err: any) {
+      // 1) Intentar mapear a campos
       const mapped = mapApiErrorToForm<SigninForm>(err, setError);
-      if (!mapped) setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
+
+      // 2) Si backend trae errors[], los mostramos
+      const errorsArr = err?.response?.data?.errors || [];
+      if (Array.isArray(errorsArr) && errorsArr.length > 0) {
+        const msgs = errorsArr.map((e: any) => e?.message || String(e));
+        setValidationErrors(msgs);
+      }
+
+      // 3) Si no mapeó a campos y tampoco hay array claro, usar mensaje global
+      if (!mapped && (!errorsArr || errorsArr.length === 0)) {
+        setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
+      }
     }
   };
 
@@ -83,6 +97,15 @@ export default function LoginScreen() {
 
           {serverErr && (
             <AlertBox type="error" code={serverErr.code} message={serverErr.message} detail={serverErr.detail} />
+          )}
+
+          {/* Lista de errores de validación (si vienen varios del backend) */}
+          {validationErrors.length > 0 && (
+            <View style={styles.validationBox}>
+              {validationErrors.map((msg, i) => (
+                <Text key={i} style={styles.validationText}>• {msg}</Text>
+              ))}
+            </View>
           )}
 
           {/* Email */}
@@ -136,7 +159,17 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, backgroundColor: '#00224D', alignItems: 'center', justifyContent: 'center', padding: 20 },
   logo: { width: 150, height: 150, marginBottom: 30, resizeMode: 'contain' },
   title: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 10 },
-  subtitle: { color: '#ccc', fontSize: 14, marginBottom: 30, textAlign: 'center' },
+  subtitle: { color: '#ccc', fontSize: 14, marginBottom: 10, textAlign: 'center' },
+
+  validationBox: {
+    width: '100%',
+    backgroundColor: '#7f1d1d',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  validationText: { color: '#FFE4E6', fontSize: 12 },
+
   input: {
     width: '100%',
     height: 50,
