@@ -15,6 +15,9 @@ export function useUserData() {
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
 
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [loadingReservations, setLoadingReservations] = useState(false);
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -47,6 +50,18 @@ export function useUserData() {
           setCompanyName(companyList[0].cmp_name || null);
           setCompanyId(companyList[0].cmp_id || null);
         }
+
+        try {
+          setLoadingReservations(true);
+          const rsvRes = await api.get(`/users/${usr_id}/reservations`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const list = rsvRes?.data?.data ?? rsvRes?.data ?? [];
+          setReservations(Array.isArray(list) ? list : []);
+        } finally {
+          setLoadingReservations(false);
+        }
+
       } catch (err) {
         console.error('Error al obtener datos del usuario:', err);
       } finally {
@@ -67,5 +82,7 @@ export function useUserData() {
     companies,
     companyName,
     companyId, // <- ahora lo puedes usar directamente para pedir los cajones
+    reservations,
+    loadingReservations
   };
 }

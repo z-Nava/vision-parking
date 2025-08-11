@@ -19,11 +19,10 @@ export default function HomeScreen() {
   const [activeCmpId, setActiveCmpId] = useState<string | null>(null);
   const [activeCmpName, setActiveCmpName] = useState<string | null>(null);
 
-  // lista de cajones
   const [parkingLots, setParkingLots] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  // acceso local para ocultar alerta en cuanto el backend te acepte
+  // acceso local para ocultar alerta cuando el backend te acepte
   const [localHasAccess, setLocalHasAccess] = useState<boolean>(hasAccess);
   useEffect(() => setLocalHasAccess(hasAccess), [hasAccess]);
 
@@ -86,15 +85,18 @@ export default function HomeScreen() {
     }
   };
 
+  // Colores por estado según tu API
   const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'Activo': return '#2ecc71';
-      case 'Reservado': return '#34495e';
-      case 'Ocupado': return '#c0392b';
-      case 'Inactivo': return '#7f8c8d';
-      default: return '#bdc3c7';
+      case 'Disponible': return '#2ecc71'; // verde
+      case 'Reservado':  return '#1f6feb'; // azul
+      case 'Ocupado':    return '#c0392b'; // rojo
+      case 'Inactivo':   return '#7f8c8d'; // gris
+      default:           return '#bdc3c7'; // por si acaso
     }
   };
+
+  const isReservable = (status?: string) => status === 'Disponible';
 
   if (loading) {
     return (
@@ -110,7 +112,7 @@ export default function HomeScreen() {
         <Text style={styles.title}>VisionParking</Text>
         <Text style={styles.welcome}>Hola! <Text style={styles.username}>{username}</Text></Text>
 
-        {/* Compañía activa + cambiar */}
+        {/* Compañía activa */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Text style={styles.company}>
             Compañia: <Text style={styles.companyName}>{activeCmpName || 'Sin compañía'}</Text>
@@ -141,35 +143,52 @@ export default function HomeScreen() {
             <Text style={styles.sectionTitle}>Estacionamiento: {lot.pkl_name}</Text>
             <View style={styles.cajonesContainer}>
               <ScrollView style={styles.cajonesScroll}>
-                {lot.parking_spots?.map((spot: any, index: number) => (
+                {lot.parking_spots
+              ?.filter((spot: any) => {
+                const statusName = spot.status?.stu_name;
+                return ['Disponible', 'Ocupado', 'Reservado'].includes(statusName);
+              })
+              .map((spot: any, index: number) => {
+                const statusName = spot.status?.stu_name as string | undefined;
+                const color = getStatusColor(statusName);
+                const reservable = isReservable(statusName);
+
+                return (
                   <View key={index} style={styles.cajonCard}>
                     <View>
                       <Text style={styles.cajonNombre}>Cajón {spot.pks_number}</Text>
-                      <Text style={[styles.estadoText, { color: getStatusColor(spot.status?.stu_name) }]}>
-                        {spot.status?.stu_name}
-                      </Text>
+
+                      {/* Badge de estado con color */}
+                      <View style={[styles.statusBadge, { backgroundColor: color }]}>
+                        <Text style={styles.statusBadgeText}>{statusName || '—'}</Text>
+                      </View>
                     </View>
 
-                    {spot.status?.stu_name === 'Activo' ? (
+                    {reservable ? (
                       <TouchableOpacity
                         style={styles.reservarButton}
-                        onPress={() => router.push({
-                          pathname: '/parking/schedule',
-                          params: {
-                            pks_id: spot.pks_id,
-                            cmp_id: lot.cmp_id,
-                            pkl_id: lot.pkl_id,
-                            pks_number: spot.pks_number,
-                          },
-                        })}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/parking/schedule',
+                            params: {
+                              pks_id: spot.pks_id,
+                              cmp_id: lot.cmp_id,
+                              pkl_id: lot.pkl_id,
+                              pks_number: spot.pks_number,
+                            },
+                          })
+                        }
                       >
                         <Text style={styles.reservarText}>Reservar</Text>
                       </TouchableOpacity>
                     ) : (
-                      <Text style={[styles.estadoText, { fontStyle: 'italic' }]}>No disponible</Text>
+                      <Text style={[styles.estadoText, { fontStyle: 'italic' }]}>
+                        No disponible
+                      </Text>
                     )}
                   </View>
-                ))}
+                );
+              })}
               </ScrollView>
             </View>
           </View>
@@ -198,6 +217,7 @@ export default function HomeScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   reservarButton: {
     backgroundColor: '#FACC15',
@@ -208,11 +228,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reservarText: { color: '#00224D', fontWeight: 'bold' },
+
   container: { flex: 1, backgroundColor: '#00224D', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 80 },
   title: { fontSize: 20, color: 'white', fontWeight: '700', marginBottom: 5 },
   welcome: { fontSize: 20, color: '#FACC15', fontWeight: 'bold', marginBottom: 20 },
   username: { fontWeight: 'bold' },
+
   sectionTitle: { fontSize: 16, color: '#FACC15', fontWeight: 'bold', marginTop: 10, marginBottom: 10 },
+
   cajonCard: {
     backgroundColor: '#000',
     borderRadius: 10,
@@ -223,8 +246,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cajonNombre: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  estado: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 },
   estadoText: { color: '#fff', fontWeight: '600' },
+
+  // Badge de estado
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+  },
+  statusBadgeText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+
   vehiculosHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 25, marginBottom: 10 },
   addButton: { backgroundColor: '#FACC15', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   addButtonText: { fontSize: 20, fontWeight: 'bold', color: '#00224D' },
@@ -232,12 +269,15 @@ const styles = StyleSheet.create({
   vehiculoCard: { backgroundColor: '#000', borderRadius: 10, padding: 10, width: '48%', marginBottom: 10 },
   placas: { color: '#fff', fontWeight: 'bold', marginBottom: 5 },
   modelo: { color: '#facc15', fontWeight: '600' },
+
   alertBox: { backgroundColor: '#F87171', padding: 12, borderRadius: 10, marginBottom: 15 },
   alertText: { color: '#fff', fontWeight: '600', textAlign: 'center' },
   cajonesContainer: { maxHeight: 300, marginBottom: 20, borderRadius: 10, overflow: 'hidden' },
   cajonesScroll: { backgroundColor: '#001A3D', borderRadius: 10, padding: 10 },
+
   company: { fontSize: 16, color: 'white', marginBottom: 10 },
   companyName: { color: '#FACC15', fontWeight: 'bold' },
+
   refreshButton: {
     marginTop: 10,
     backgroundColor: '#FACC15',

@@ -1,3 +1,4 @@
+// app/user/indexuser.tsx  (ProfileScreen)
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
@@ -5,14 +6,52 @@ import { useRouter } from 'expo-router';
 import { clearSession } from '@/utils/clearSession';
 import { useUserData } from '../../hooks/useUserData';
 
+function formatDateRange(isoStart?: string, isoEnd?: string) {
+  if (!isoStart || !isoEnd) return '—';
+  try {
+    const start = new Date(isoStart);
+    const end = new Date(isoEnd);
+    const f = (d: Date) =>
+      d.toLocaleString('es-MX', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    return `${f(start)}  →  ${f(end)}`;
+  } catch {
+    return `${isoStart} → ${isoEnd}`;
+  }
+}
+
+function statusColor(status?: string) {
+  switch (status) {
+    case 'Realizada': return '#1f6feb'; // azul
+    case 'Activa':    return '#2ecc71'; // verde
+    case 'Cancelada': return '#7f8c8d'; // gris
+    case 'Rechazada': return '#c0392b'; // rojo
+    default:          return '#34495e'; // neutro
+  }
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
-  const { username, email, userId, vehicles, companies, loading } = useUserData();
+  const {
+    username,
+    email,
+    vehicles,
+    companies,
+    loading,
+    reservations,
+    loadingReservations,
+  } = useUserData();
 
   const user = {
     nombre: username,
     correo: email || 'Correo no disponible',
-    avatar: require('../../assets/images/react-logo.png'), // Imagen temporal
+    avatar: require('../../assets/images/react-logo.png'),
   };
 
   const empresa = companies.length > 0 ? companies[0] : null;
@@ -20,6 +59,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <ScrollView>
+
         {/* Perfil */}
         <View style={styles.profile}>
           <Image source={user.avatar} style={styles.avatar} />
@@ -36,6 +76,38 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <Text style={styles.noDataText}>No estás vinculado a ninguna empresa.</Text>
+        )}
+
+        {/* Mis reservaciones */}
+        <Text style={styles.sectionTitle}>Mis reservaciones</Text>
+        {loadingReservations ? (
+          <ActivityIndicator size="large" color="#facc15" />
+        ) : reservations.length === 0 ? (
+          <Text style={styles.noDataText}>No tienes reservaciones registradas.</Text>
+        ) : (
+          reservations.map((rsv) => {
+            const statusName = rsv.status?.stu_name as string | undefined;
+            const color = statusColor(statusName);
+            const spot = rsv.parking_spot;
+            const lot = spot?.parking_lot;
+
+            return (
+              <View key={rsv.rsv_id} style={styles.rsvCard}>
+                <View style={styles.rsvHeaderRow}>
+                  <Text style={styles.rsvTitle}>Cajón {spot?.pks_number ?? '—'}</Text>
+                  <View style={[styles.badge, { backgroundColor: color }]}>
+                    <Text style={styles.badgeText}>{statusName ?? '—'}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.rsvDetail}>
+                  {formatDateRange(rsv.rsv_initial_date, rsv.rsv_end_date)}
+                </Text>
+                <Text style={styles.rsvDetail}>Motivo: {rsv.rsv_reason || '—'}</Text>
+                <Text style={styles.rsvDetail}>Compañía (cmp_id): {lot?.cmp_id ?? '—'}</Text>
+              </View>
+            );
+          })
         )}
 
         {/* Vehículos */}
@@ -77,7 +149,6 @@ export default function ProfileScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -105,12 +176,14 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: 14,
   },
+
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FACC15',
     marginBottom: 10,
   },
+
   reservationCard: {
     backgroundColor: '#003366',
     borderRadius: 10,
@@ -121,21 +194,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 5,
   },
-  cancelButton: {
-    marginTop: 10,
-    backgroundColor: '#b91c1c',
-    paddingVertical: 10,
-    borderRadius: 8,
+
+  // ===== Reservas =====
+  rsvCard: {
+    backgroundColor: '#001A3D',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  rsvHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 6,
   },
-  cancelText: {
+  rsvTitle: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  rsvDetail: { color: '#e5e7eb', marginTop: 2 },
+
+  badge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  badgeText: {
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 12,
   },
+
+  // ===== Vehículos =====
   vehiculosHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 18,
     marginBottom: 10,
   },
   addButton: {
@@ -171,25 +263,25 @@ const styles = StyleSheet.create({
     color: '#facc15',
     fontWeight: '600',
   },
+
+  // ===== Otros =====
   clearSessionButton: {
-  width: '100%',
-  backgroundColor: '#8B0000', // rojo oscuro elegante
-  paddingVertical: 14,
-  borderRadius: 10,
-  alignItems: 'center',
-  marginTop: 20,
-},
+    width: '100%',
+    backgroundColor: '#8B0000',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
   clearSessionText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
   },
   noDataText: {
-  color: '#ccc',
-  fontStyle: 'italic',
-  marginBottom: 15,
-  textAlign: 'center',
-},
-
-
+    color: '#ccc',
+    fontStyle: 'italic',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
 });
