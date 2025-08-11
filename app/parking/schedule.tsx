@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,6 +22,7 @@ export default function ScheduleScreen() {
   const [initialDate, setInitialDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const [showPicker, setShowPicker] = useState<{
     type: 'initial' | 'end';
@@ -40,16 +42,12 @@ export default function ScheduleScreen() {
   };
 
   const openPicker = (type: 'initial' | 'end') => {
-    if (Platform.OS === 'ios') {
-      setShowPicker({ type, step: 'date', visible: true }); // En iOS es uno solo
-    } else {
-      setShowPicker({ type, step: 'date', visible: true }); // Android necesita doble
-    }
+    setShowPicker({ type, step: 'date', visible: true });
   };
 
   const handlePickerChange = (_event: any, selectedDate?: Date) => {
     if (!selectedDate) {
-      setShowPicker({ ...showPicker, visible: false });
+      setShowPicker((s) => ({ ...s, visible: false }));
       return;
     }
 
@@ -67,11 +65,13 @@ export default function ScheduleScreen() {
           setShowPicker({ ...showPicker, step: 'time', visible: true });
         } else {
           setInitialDate(currentDate);
+          setShowPicker({ ...showPicker, visible: false });
         }
       } else {
         const newDate = new Date(initialDate);
         newDate.setHours(currentDate.getHours());
         newDate.setMinutes(currentDate.getMinutes());
+        newDate.setSeconds(0, 0);
         setInitialDate(newDate);
         setShowPicker({ ...showPicker, visible: false });
       }
@@ -87,11 +87,13 @@ export default function ScheduleScreen() {
           setShowPicker({ ...showPicker, step: 'time', visible: true });
         } else {
           setEndDate(currentDate);
+          setShowPicker({ ...showPicker, visible: false });
         }
       } else {
         const newDate = new Date(endDate);
         newDate.setHours(currentDate.getHours());
         newDate.setMinutes(currentDate.getMinutes());
+        newDate.setSeconds(0, 0);
         setEndDate(newDate);
         setShowPicker({ ...showPicker, visible: false });
       }
@@ -99,37 +101,67 @@ export default function ScheduleScreen() {
   };
 
   const handleReservar = async () => {
-  const usr_id = await SecureStore.getItemAsync('usr_id');
-  const token = await SecureStore.getItemAsync('auth_token');
+    const usr_id = await SecureStore.getItemAsync('usr_id');
+    const token = await SecureStore.getItemAsync('auth_token');
 
-  if (!usr_id || !token || !pks_id) {
-    Alert.alert('Error', 'Faltan datos para crear la reservación');
-    return;
-  }
+    if (!usr_id || !token || !pks_id) {
+      Alert.alert('Error', 'Faltan datos para crear la reservación');
+      return;
+    }
 
-  if (initialDate >= endDate) {
-    Alert.alert("Error", "La fecha de fin debe ser posterior a la de inicio.");
-    return;
-  }
+    // Validaciones
+    const now = new Date();
+    const start = new Date(initialDate);
+    const end = new Date(endDate);
 
-  try {
-    await api.post('/reservations', {
-      usr_id,
-      pks_id,
-      rsv_reason: reason,
-      rsv_initial_date: initialDate.toISOString(), // formato ISO válido
-      rsv_end_date: endDate.toISOString()
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    if (!reason || reason.trim().length < 5) {
+      Alert.alert('Atención', 'Indica un motivo (mínimo 5 caracteres).');
+      return;
+    }
+    if (start < now) {
+      Alert.alert('Atención', 'La fecha/hora inicial debe ser futura.');
+      return;
+    }
+    if (end <= start) {
+      Alert.alert('Atención', 'La fecha de fin debe ser posterior a la de inicio.');
+      return;
+    }
+    const minMs = 15 * 60 * 1000; // 15 minutos
+    if (end.getTime() - start.getTime() < minMs) {
+      Alert.alert('Atención', 'La reservación debe durar al menos 15 minutos.');
+      return;
+    }
 
-    Alert.alert('¡Reservado!', `Tu cajón ${pks_number} ha sido reservado`);
-    router.push('/home/indexapp');
-  } catch (err) {
-    console.error(err);
-    Alert.alert('Error', 'No se pudo crear la reservación');
-  }
-}; 
+    // Normalizar ISO
+    const startISO = new Date(start.setSeconds(0, 0)).toISOString();
+    const endISO = new Date(end.setSeconds(0, 0)).toISOString();
+
+    try {
+      setSubmitting(true);
+
+      await api.post(
+        '/reservations',
+        {
+          usr_id,
+          pks_id,
+          rsv_reason: reason.trim(),
+          rsv_initial_date: startISO,
+          rsv_end_date: endISO,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      Alert.alert('¡Reservado!', `Tu cajón ${pks_number} ha sido reservado`);
+      router.push('/home/indexapp');
+    } catch (err: any) {
+      console.error('POST /reservations error:', err?.response?.data || err?.message || err);
+      const msg = err?.response?.data?.message || 'No se pudo crear la reservación';
+      Alert.alert('Error', msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Reservar Cajón {pks_number}</Text>
@@ -144,34 +176,34 @@ export default function ScheduleScreen() {
       />
 
       <Text style={styles.label}>Fecha de inicio</Text>
-      <TouchableOpacity
-        onPress={() => openPicker('initial')}
-        style={styles.dateButton}
-      >
+      <TouchableOpacity onPress={() => openPicker('initial')} style={styles.dateButton}>
         <Text style={styles.dateText}>{formatDate(initialDate)}</Text>
       </TouchableOpacity>
 
       <Text style={styles.label}>Fecha de fin</Text>
-      <TouchableOpacity
-        onPress={() => openPicker('end')}
-        style={styles.dateButton}
-      >
+      <TouchableOpacity onPress={() => openPicker('end')} style={styles.dateButton}>
         <Text style={styles.dateText}>{formatDate(endDate)}</Text>
       </TouchableOpacity>
 
       {showPicker.visible && (
         <DateTimePicker
-          value={
-            showPicker.type === 'initial' ? initialDate : endDate
-          }
+          value={showPicker.type === 'initial' ? initialDate : endDate}
           mode={showPicker.step === 'date' ? 'date' : 'time'}
           display="default"
           onChange={handlePickerChange}
         />
       )}
 
-      <TouchableOpacity style={styles.button} onPress={handleReservar}>
-        <Text style={styles.buttonText}>Reservar</Text>
+      <TouchableOpacity
+        style={[styles.button, submitting && { opacity: 0.7 }]}
+        onPress={handleReservar}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#00224D" />
+        ) : (
+          <Text style={styles.buttonText}>Reservar</Text>
+        )}
       </TouchableOpacity>
     </View>
   );

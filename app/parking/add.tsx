@@ -19,15 +19,22 @@ export default function AddParking() {
   const cmpId = Array.isArray(cmp_id) ? cmp_id[0] : (cmp_id as string | undefined);
   const companyName = Array.isArray(cmp_name) ? cmp_name[0] : (cmp_name as string | undefined);
 
-  const { control, handleSubmit, setValue, trigger, setError, formState: { errors, isSubmitting } } =
-    useForm<AccessRequestForm>({
-      resolver: zodResolver(accessRequestSchema),
-      defaultValues: { cma_description: '', file: undefined as any },
-      mode: 'onBlur',
-      reValidateMode: 'onChange',
-    });
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    trigger,
+    setError,
+    formState: { errors, isSubmitting }
+  } = useForm<AccessRequestForm>({
+    resolver: zodResolver(accessRequestSchema),
+    defaultValues: { cma_description: '', file: undefined as any },
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
 
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
+  const [pickedFileName, setPickedFileName] = useState<string | null>(null);
 
   const handleFilePick = async () => {
     try {
@@ -39,8 +46,9 @@ export default function AddParking() {
       if (!result.canceled && result.assets.length > 0) {
         const selected = result.assets[0]; // { uri, name, size, mimeType }
         setValue('file', selected, { shouldValidate: true });
+        setPickedFileName(selected.name ?? 'archivo');
         await trigger('file');
-        Alert.alert('Archivo seleccionado', selected.name);
+        Alert.alert('Archivo seleccionado', selected.name ?? 'archivo');
       }
     } catch (error) {
       console.error('Error al seleccionar archivo:', error);
@@ -60,12 +68,12 @@ export default function AddParking() {
       const usr_id = await SecureStore.getItemAsync('usr_id');
       if (!usr_id) throw new Error('ID de usuario no encontrado.');
 
-      // 1) Crear solicitud
+      // 1) Crear solicitud (con Bearer en parkingService)
       const reqRes = await createAccessRequest(usr_id, cmpId, data.cma_description.trim());
-      const cma_id = reqRes?.data?.cma_id ?? reqRes?.cma_id;
+      const cma_id = (reqRes as any)?.data?.cma_id ?? (reqRes as any)?.cma_id;
       if (!cma_id) throw new Error('No se recibió el ID de la solicitud.');
 
-      // 2) Subir archivo
+      // 2) Subir archivo (con Bearer en parkingService)
       await uploadAccessFile(data.file, String(cma_id));
 
       Alert.alert('Éxito', 'Solicitud enviada y archivo cargado correctamente.');
@@ -74,8 +82,6 @@ export default function AddParking() {
       const mapped = mapApiErrorToForm<AccessRequestForm>(err, setError);
       if (!mapped) {
         setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
-      } else {
-        // Si pegamos al campo y quieres además un toast, puedes agregarlo aquí
       }
     }
   };
@@ -93,9 +99,10 @@ export default function AddParking() {
         <Text style={styles.subtext}>{companyName || 'Compañía'}</Text>
 
         <Text style={styles.instructions}>1. Selecciona un archivo (PDF, PNG o JPG)</Text>
-        <TouchableOpacity style={styles.saveButton} onPress={handleFilePick}>
-          <Text style={styles.saveButtonText}>Seleccionar archivo</Text>
+        <TouchableOpacity style={styles.saveButton} onPress={handleFilePick} disabled={isSubmitting}>
+          <Text style={styles.saveButtonText}>{pickedFileName ? 'Cambiar archivo' : 'Seleccionar archivo'}</Text>
         </TouchableOpacity>
+        {pickedFileName ? <Text style={styles.fileName}>{pickedFileName}</Text> : null}
         {errors.file?.message ? <Text style={styles.errorText}>{String(errors.file.message)}</Text> : null}
 
         <Text style={styles.instructions}>2. Ingresa el motivo de tu solicitud</Text>
@@ -114,6 +121,7 @@ export default function AddParking() {
               onChangeText={onChange}
               onBlur={onBlur}
               textAlignVertical="top"
+              editable={!isSubmitting}
             />
           )}
         />
@@ -146,6 +154,7 @@ const styles = StyleSheet.create({
     marginBottom: 6, textAlignVertical: 'top', borderWidth: 1, borderColor: '#D1D5DB'
   },
   errorText: { color: '#b71c1c', marginBottom: 10, fontSize: 12, alignSelf: 'flex-start' },
+  fileName: { color: '#00224D', fontSize: 12, marginTop: 6, alignSelf: 'flex-start' },
   saveButton: { backgroundColor: '#00224D', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 8, marginTop: 6 },
   saveButtonText: { color: 'white', fontWeight: '600' },
 });

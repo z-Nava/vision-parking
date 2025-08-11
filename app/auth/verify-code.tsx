@@ -7,9 +7,10 @@ import AlertBox from '../../components/AlertBox';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { verifyCodeSchema, type VerifyCodeForm } from '../../validation/auth';
-import { getConfigurated, verifyCode } from '../../services/authService';
+import { verifyCode } from '../../services/authService'; // <- solo verifyCode
 import { mapApiErrorToForm } from '../../utils/errors';
 import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function VerifyCodeScreen() {
   const { control, handleSubmit, formState: { errors, isSubmitting }, setError } =
     useForm<VerifyCodeForm>({
       resolver: zodResolver(verifyCodeSchema),
-      defaultValues: { cod_code: '' }, // string!
+      defaultValues: { cod_code: '' }, // string
       mode: 'onBlur',
       reValidateMode: 'onChange',
     });
@@ -38,33 +39,33 @@ export default function VerifyCodeScreen() {
     try {
       if (!usrId) throw new Error('No se encontró ID de usuario');
 
-      const codeNum = Number(data.cod_code); // <-- conversión aquí
+      // 1) Verificar código (endpoint público)
+      const codeNum = Number(data.cod_code);
       const res = await verifyCode(usrId, codeNum);
 
       const token = res?.tok_token ?? res?.data?.tok_token;
       if (!token) throw new Error('Token no recibido');
 
+      // 2) Guardar sesión
       await SecureStore.setItemAsync('auth_token', String(token));
+      await SecureStore.setItemAsync('usr_id', usrId);
       setToken(token);
 
-      const conf = await getConfigurated(usrId);
-      const isConfigured = conf?.isConfigurated === true;
+      // 3) Consultar configuración del usuario con BEARER (una sola vez)
+      const confRes = await api.get(`/configurated/${usrId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const isConfigured = confRes?.data?.isConfigurated === true;
 
+      // 4) Navegar
       if (isConfigured) router.push('/home/indexapp');
       else router.push('/parking/available');
+
     } catch (err: any) {
-      console.error(err);
-      const errors = err.response?.data?.errors || [];
-      if (errors.length > 0) {
-        const errorMessages = errors.map((err: any) => err.message)
-        console.log('Errores del servidor:', errorMessages);
-      }
-      else {
-              console.error('Error al verificar el código:', err);
-      }
+      console.error('Error en verify-code:', err);
       const mapped = mapApiErrorToForm<VerifyCodeForm>(err, setError);
       if (!mapped) {
-        setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
+        setServerErr({ code: err?.code, message: err?.message || err?.response?.data?.message, detail: err?.detail });
       }
     }
   };

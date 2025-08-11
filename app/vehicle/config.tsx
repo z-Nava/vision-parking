@@ -26,42 +26,41 @@ export default function ConfigVehicleScreen() {
 
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
 
+  // Configura automáticamente el header Authorization
+  useEffect(() => {
+    (async () => {
+      const token = await SecureStore.getItemAsync('auth_token');
+      if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      }
+    })();
+  }, []);
+
   const onSubmit = async (data: VehicleForm) => {
     setServerErr(null);
     try {
       const usr_id = await SecureStore.getItemAsync('usr_id');
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!usr_id || !token) throw new Error('Sesión no válida. Intenta iniciar sesión nuevamente.');
+      if (!usr_id) throw new Error('Sesión no válida. Intenta iniciar sesión nuevamente.');
 
       // 1) Registrar vehículo
-      const res = await api.post(
-        '/vehicles',
-        {
-          usr_id,
-          veh_plate: data.veh_plate.trim().toUpperCase(),
-          veh_brand: data.veh_brand.trim(),
-          veh_model: data.veh_model.trim(),
-          veh_year: Number(data.veh_year),
-          veh_color: data.veh_color.trim(),
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post('/vehicles', {
+        usr_id,
+        veh_plate: data.veh_plate.trim().toUpperCase(),
+        veh_brand: data.veh_brand.trim(),
+        veh_model: data.veh_model.trim(),
+        veh_year: Number(data.veh_year),
+        veh_color: data.veh_color.trim(),
+      });
 
       // 2) Marcar usuario como configurado
-      const configRes = await api.put(
-        `/configurated/${usr_id}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const configRes = await api.put(`/configurated/${usr_id}`, {});
       if (configRes.status !== 200) throw new Error('No se pudo actualizar la configuración del usuario.');
 
       Alert.alert('Éxito', 'Vehículo registrado correctamente');
-      router.push('/home/indexapp'); // o donde quieras llevarlo después
+      router.push('/home/indexapp');
     } catch (err: any) {
-      // Intenta pegar el error en el campo correcto si la API lo envía
       const mapped = mapApiErrorToForm<VehicleForm>(err, setError);
       if (!mapped) {
-        // Compat con catálogo (por si la API solo manda code/status)
         const status = err?.response?.status;
         if (status === 409) {
           setError('veh_plate', { message: 'Placa ya registrada' });
@@ -138,7 +137,7 @@ export default function ConfigVehicleScreen() {
       />
       {errors.veh_year?.message && <Text style={styles.err}>{errors.veh_year.message}</Text>}
 
-      {/* Color (acepta nombre o #RRGGBB) */}
+      {/* Color */}
       <Controller
         control={control}
         name="veh_color"

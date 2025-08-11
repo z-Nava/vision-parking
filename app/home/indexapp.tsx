@@ -1,6 +1,6 @@
 // app/home/indexapp.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserData } from '../../hooks/useUserData';
@@ -38,20 +38,26 @@ export default function HomeScreen() {
     }
   }, [cmpIdFromNav, cmpNameFromNav, companies]);
 
+  /** Helper para inyectar el Bearer desde esta vista (sin interceptores) */
+  const getAuthHeaders = useCallback(async () => {
+    const token = await SecureStore.getItemAsync('auth_token');
+    if (!token) throw new Error('No hay token de sesión. Inicia sesión de nuevo.');
+    return { Authorization: `Bearer ${token}` };
+  }, []);
+
   const fetchParkingLots = useCallback(async () => {
     if (!activeCmpId) return;
     try {
-      const token = await SecureStore.getItemAsync('auth_token');
-      const res = await api.get(`/companies/${activeCmpId}/parking-lots`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = await getAuthHeaders();
+      const res = await api.get(`/companies/${activeCmpId}/parking-lots`, { headers });
       const lots = res?.data?.data ?? res?.data ?? [];
       console.log('Cajones obtenidos de', activeCmpId, lots);
       setParkingLots(lots);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al obtener cajones:', err);
+      Alert.alert('Error', err?.message || 'No se pudieron obtener los cajones.');
     }
-  }, [activeCmpId]);
+  }, [activeCmpId, getAuthHeaders]);
 
   // cargar cajones cuando cambie la compañía activa
   useEffect(() => {
@@ -62,12 +68,10 @@ export default function HomeScreen() {
     try {
       setRefreshing(true);
       const usr_id = await SecureStore.getItemAsync('usr_id');
-      const token = await SecureStore.getItemAsync('auth_token');
-      if (!usr_id || !token) return;
+      if (!usr_id) throw new Error('No hay usuario en sesión');
 
-      const res = await api.get(`/users/${usr_id}/companies`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = await getAuthHeaders();
+      const res = await api.get(`/users/${usr_id}/companies`, { headers });
 
       const companiesList = res?.data?.data ?? res?.data ?? [];
       const accepted = Array.isArray(companiesList) && companiesList.length > 0;
@@ -78,8 +82,9 @@ export default function HomeScreen() {
       }
       console.log('Acceso actualizado:', accepted);
       console.log('Compañías:', companiesList);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al refrescar acceso:', error);
+      Alert.alert('Error', error?.message || 'No se pudo refrescar el acceso.');
     } finally {
       setRefreshing(false);
     }
@@ -144,51 +149,51 @@ export default function HomeScreen() {
             <View style={styles.cajonesContainer}>
               <ScrollView style={styles.cajonesScroll}>
                 {lot.parking_spots
-              ?.filter((spot: any) => {
-                const statusName = spot.status?.stu_name;
-                return ['Disponible', 'Ocupado', 'Reservado'].includes(statusName);
-              })
-              .map((spot: any, index: number) => {
-                const statusName = spot.status?.stu_name as string | undefined;
-                const color = getStatusColor(statusName);
-                const reservable = isReservable(statusName);
+                  ?.filter((spot: any) => {
+                    const statusName = spot.status?.stu_name;
+                    return ['Disponible', 'Ocupado', 'Reservado'].includes(statusName);
+                  })
+                  .map((spot: any, index: number) => {
+                    const statusName = spot.status?.stu_name as string | undefined;
+                    const color = getStatusColor(statusName);
+                    const reservable = isReservable(statusName);
 
-                return (
-                  <View key={index} style={styles.cajonCard}>
-                    <View>
-                      <Text style={styles.cajonNombre}>Cajón {spot.pks_number}</Text>
+                    return (
+                      <View key={index} style={styles.cajonCard}>
+                        <View>
+                          <Text style={styles.cajonNombre}>Cajón {spot.pks_number}</Text>
 
-                      {/* Badge de estado con color */}
-                      <View style={[styles.statusBadge, { backgroundColor: color }]}>
-                        <Text style={styles.statusBadgeText}>{statusName || '—'}</Text>
+                          {/* Badge de estado con color */}
+                          <View style={[styles.statusBadge, { backgroundColor: color }]}>
+                            <Text style={styles.statusBadgeText}>{statusName || '—'}</Text>
+                          </View>
+                        </View>
+
+                        {reservable ? (
+                          <TouchableOpacity
+                            style={styles.reservarButton}
+                            onPress={() =>
+                              router.push({
+                                pathname: '/parking/schedule',
+                                params: {
+                                  pks_id: spot.pks_id,
+                                  cmp_id: lot.cmp_id,
+                                  pkl_id: lot.pkl_id,
+                                  pks_number: spot.pks_number,
+                                },
+                              })
+                            }
+                          >
+                            <Text style={styles.reservarText}>Reservar</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={[styles.estadoText, { fontStyle: 'italic' }]}>
+                            No disponible
+                          </Text>
+                        )}
                       </View>
-                    </View>
-
-                    {reservable ? (
-                      <TouchableOpacity
-                        style={styles.reservarButton}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/parking/schedule',
-                            params: {
-                              pks_id: spot.pks_id,
-                              cmp_id: lot.cmp_id,
-                              pkl_id: lot.pkl_id,
-                              pks_number: spot.pks_number,
-                            },
-                          })
-                        }
-                      >
-                        <Text style={styles.reservarText}>Reservar</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <Text style={[styles.estadoText, { fontStyle: 'italic' }]}>
-                        No disponible
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
+                    );
+                  })}
               </ScrollView>
             </View>
           </View>
@@ -216,7 +221,6 @@ export default function HomeScreen() {
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   reservarButton: {

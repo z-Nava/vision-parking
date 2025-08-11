@@ -1,5 +1,6 @@
+// app/vehicle/add.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import * as SecureStore from 'expo-secure-store';
 import api from '../../services/api';
@@ -24,8 +25,9 @@ function formatPlateInput(raw: string): string {
 export default function AddVehicleScreen() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
+  const [loadingList, setLoadingList] = useState<boolean>(true);
 
-  const { control, handleSubmit, formState: { errors, isSubmitting, isValid }, setError, reset } =
+  const { control, handleSubmit, formState: { errors, isSubmitting }, setError, reset, watch } =
     useForm<VehicleForm>({
       resolver: zodResolver(vehicleSchema),
       defaultValues: { veh_brand: '', veh_model: '', veh_year: '', veh_color: '', veh_plate: '' },
@@ -34,14 +36,20 @@ export default function AddVehicleScreen() {
     });
 
   const fetchVehiculos = useCallback(async () => {
+    setLoadingList(true);
     try {
       const usr_id = await SecureStore.getItemAsync('usr_id');
-      if (!usr_id) return;
-      const res = await api.get(`/users/${usr_id}/vehicles`);
+      const token  = await SecureStore.getItemAsync('auth_token');
+      if (!usr_id || !token) return;
+      const res = await api.get(`/users/${usr_id}/vehicles`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const list = res?.data?.data ?? res?.data ?? [];
       setVehiculos(list);
     } catch (error) {
       console.error('Error al obtener vehículos:', error);
+    } finally {
+      setLoadingList(false);
     }
   }, []);
 
@@ -53,7 +61,8 @@ export default function AddVehicleScreen() {
     setServerErr(null);
     try {
       const usr_id = await SecureStore.getItemAsync('usr_id');
-      if (!usr_id) throw new Error('Usuario no autenticado');
+      const token  = await SecureStore.getItemAsync('auth_token');
+      if (!usr_id || !token) throw new Error('Usuario no autenticado');
 
       await api.post('/vehicles', {
         usr_id,
@@ -62,6 +71,8 @@ export default function AddVehicleScreen() {
         veh_model: data.veh_model.trim(),
         veh_year: Number(data.veh_year),
         veh_color: data.veh_color.trim(),
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       Alert.alert('Éxito', 'Vehículo guardado correctamente');
@@ -75,31 +86,37 @@ export default function AddVehicleScreen() {
     }
   };
 
+  // ===== UI =====
   return (
     <View style={styles.container}>
       <ScrollView>
-
         <Text style={styles.sectionTitle}>Mis vehículos</Text>
 
-        {serverErr && (
-          <AlertBox type="error" code={serverErr.code} message={serverErr.message} detail={serverErr.detail} />
+        {loadingList ? (
+          <ActivityIndicator size="large" color="#FACC15" style={{ marginBottom: 20 }} />
+        ) : (
+          <View style={styles.vehiculosContainer}>
+            {vehiculos.map((v, index) => (
+              <View key={index} style={styles.vehiculoCard}>
+                <Text style={styles.placas}>{v.veh_plate}</Text>
+                <Text style={styles.modelo}>{`${v.veh_brand} ${v.veh_model}`}</Text>
+              </View>
+            ))}
+          </View>
         )}
-
-        <View style={styles.vehiculosContainer}>
-          {vehiculos.map((v, index) => (
-            <View key={index} style={styles.vehiculoCard}>
-              <Text style={styles.placas}>{v.veh_plate}</Text>
-              <Text style={styles.modelo}>{`${v.veh_brand} ${v.veh_model}`}</Text>
-            </View>
-          ))}
-          {vehiculos.length === 0 && (
-            <Text style={{ color: '#cbd5e1' }}>Aún no tienes vehículos registrados.</Text>
-          )}
-        </View>
 
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Agregar nuevo vehículo</Text>
           <Text style={styles.formSubtitle}>Solo tienes un límite de 4 vehículos</Text>
+
+          {serverErr && (
+            <AlertBox
+              type="error"
+              code={serverErr.code}
+              message={serverErr.message}
+              detail={serverErr.detail}
+            />
+          )}
 
           {/* Marca */}
           <Controller
@@ -107,16 +124,17 @@ export default function AddVehicleScreen() {
             name="veh_brand"
             render={({ field: { value, onChange, onBlur } }) => (
               <TextInput
-                style={styles.input}
+                style={[styles.input, errors.veh_brand && styles.inputError]}
                 placeholder="Marca del vehículo"
                 placeholderTextColor="#666"
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
+                editable={!reachedLimit && !isSubmitting}
               />
             )}
           />
-          {errors.veh_brand?.message && <Text style={styles.err}>{errors.veh_brand.message}</Text>}
+          {errors.veh_brand && <Text style={styles.errorText}>{errors.veh_brand.message}</Text>}
 
           {/* Modelo */}
           <Controller
@@ -124,76 +142,80 @@ export default function AddVehicleScreen() {
             name="veh_model"
             render={({ field: { value, onChange, onBlur } }) => (
               <TextInput
-                style={styles.input}
+                style={[styles.input, errors.veh_model && styles.inputError]}
                 placeholder="Modelo del vehículo"
                 placeholderTextColor="#666"
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
+                editable={!reachedLimit && !isSubmitting}
               />
             )}
           />
-          {errors.veh_model?.message && <Text style={styles.err}>{errors.veh_model.message}</Text>}
+          {errors.veh_model && <Text style={styles.errorText}>{errors.veh_model.message}</Text>}
 
           {/* Año */}
           <Controller
             control={control}
             name="veh_year"
-            render={({ field: { value, onChange, onBlur} }) => (
+            render={({ field: { value, onChange, onBlur } }) => (
               <TextInput
-                style={styles.input}
-                placeholder="Año del vehículo"
+                style={[styles.input, errors.veh_year && styles.inputError]}
+                placeholder="Año del vehículo (e.g. 2018)"
                 placeholderTextColor="#666"
                 keyboardType="numeric"
                 maxLength={4}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
+                editable={!reachedLimit && !isSubmitting}
               />
             )}
           />
-          {errors.veh_year?.message && <Text style={styles.err}>{errors.veh_year.message}</Text>}
+          {errors.veh_year && <Text style={styles.errorText}>{errors.veh_year.message}</Text>}
 
           {/* Color */}
           <Controller
             control={control}
             name="veh_color"
-            render={({ field: { value, onChange, onBlur } }) => (
+            render={({ field: { value, onChange, onBlur} }) => (
               <TextInput
-                style={styles.input}
-                placeholder="Color del vehículo (ej. Azul o #1F4E79)"
+                style={[styles.input, errors.veh_color && styles.inputError]}
+                placeholder="Color del vehículo"
                 placeholderTextColor="#666"
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
+                editable={!reachedLimit && !isSubmitting}
               />
             )}
           />
-          {errors.veh_color?.message && <Text style={styles.err}>{errors.veh_color.message}</Text>}
+          {errors.veh_color && <Text style={styles.errorText}>{errors.veh_color.message}</Text>}
 
-          {/* Placas (autoformato AAA-000-A) */}
+          {/* Placas (formateo en vivo) */}
           <Controller
             control={control}
             name="veh_plate"
             render={({ field: { value, onChange, onBlur } }) => (
               <TextInput
-                style={styles.input}
-                placeholder="Placas del vehículo (AAA-000-A)"
+                style={[styles.input, errors.veh_plate && styles.inputError]}
+                placeholder="Placas (AAA-000-A)"
                 placeholderTextColor="#666"
                 autoCapitalize="characters"
                 value={value}
                 onChangeText={(t) => onChange(formatPlateInput(t))}
                 onBlur={onBlur}
-                maxLength={9}
+                maxLength={9} // AAA-000-A
+                editable={!reachedLimit && !isSubmitting}
               />
             )}
           />
-          {errors.veh_plate?.message && <Text style={styles.err}>{errors.veh_plate.message}</Text>}
+          {errors.veh_plate && <Text style={styles.errorText}>{errors.veh_plate.message}</Text>}
 
           <TouchableOpacity
-            style={[styles.saveButton, (isSubmitting || !isValid || reachedLimit) && { opacity: 0.6 }]}
+            style={[styles.saveButton, (reachedLimit || isSubmitting) && { opacity: 0.7 }]}
             onPress={handleSubmit(onSubmit)}
-            disabled={isSubmitting || !isValid || reachedLimit}
+            disabled={reachedLimit || isSubmitting}
           >
             <Text style={styles.saveButtonText}>
               {reachedLimit ? 'Límite alcanzado' : (isSubmitting ? 'Guardando...' : 'Guardar vehículo')}
@@ -208,17 +230,86 @@ export default function AddVehicleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#00224D', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 80 },
-  sectionTitle: { fontSize: 18, color: '#FACC15', fontWeight: 'bold', marginBottom: 10 },
-  vehiculosContainer: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 20 },
-  vehiculoCard: { backgroundColor: '#000', borderRadius: 10, padding: 10, width: '48%' },
-  placas: { color: '#fff', fontWeight: 'bold', marginBottom: 5 },
-  modelo: { color: '#facc15', fontWeight: '600' },
-  formCard: { backgroundColor: '#FACC15', borderRadius: 12, padding: 20 },
-  formTitle: { fontSize: 16, fontWeight: 'bold', color: '#00224D', marginBottom: 4, textAlign: 'center' },
-  formSubtitle: { color: '#00224D', fontSize: 12, textAlign: 'center', marginBottom: 15 },
-  input: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 15, height: 50, fontSize: 16, marginBottom: 6, borderWidth: 1, borderColor: '#D1D5DB' },
-  err: { color: '#b71c1c', marginBottom: 10, fontSize: 12, alignSelf: 'flex-start' },
-  saveButton: { backgroundColor: '#00224D', paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: 5 },
-  saveButtonText: { color: '#fff', fontWeight: '600' },
+  container: {
+    flex: 1,
+    backgroundColor: '#00224D',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 80,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    color: '#FACC15',
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  vehiculosContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+    marginBottom: 20,
+  },
+  vehiculoCard: {
+    backgroundColor: '#000',
+    borderRadius: 10,
+    padding: 10,
+    width: '48%',
+  },
+  placas: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  modelo: {
+    color: '#facc15',
+    fontWeight: '600',
+  },
+  formCard: {
+    backgroundColor: '#FACC15',
+    borderRadius: 12,
+    padding: 20,
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#00224D',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  formSubtitle: {
+    color: '#00224D',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    height: 50,
+    fontSize: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  inputError: {
+    borderColor: '#B91C1C',
+  },
+  errorText: {
+    color: '#7f1d1d',
+    marginTop: -6,
+    marginBottom: 8,
+    fontSize: 12,
+  },
+  saveButton: {
+    backgroundColor: '#00224D',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
 });

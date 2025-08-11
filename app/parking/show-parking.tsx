@@ -1,5 +1,6 @@
+// app/parking/show-parking.tsx
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import BottomNav from '../../components/BottomNav';
 import { useUserData } from '../../hooks/useUserData';
@@ -10,39 +11,40 @@ export default function MyParkingsScreen() {
 
   const handleGoToParking = (cmp_id: string, cmp_name: string) => {
     router.push({
-    pathname: '/home/indexapp',
-    params: { cmp_id, cmp_name, t: Date.now().toString() }, // t fuerza refresco
-  });
-  };
-
-  const handleDelete = (alias: string) => {
-    alert(`Eliminar estacionamiento: ${alias}`);
-    // Lógica de eliminación con API si aplica
+      pathname: '/home/indexapp',
+      params: { cmp_id, cmp_name, t: Date.now().toString() }, // fuerza recarga en indexapp
+    });
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView>
-        <Text style={styles.title}>Tus estacionamientos vinculados</Text>
+      <Text style={styles.title}>Tus estacionamientos vinculados</Text>
 
-        {companies.length === 0 ? (
-          <Text style={styles.noDataText}>Aún no tienes estacionamientos vinculados.</Text>
-        ) : (
-          companies.map((parking: any, index: number) => (
-            <View key={index} style={styles.card}>
-              <Text style={styles.parkingName}>{parking.cmp_name}</Text>
-              <Text style={styles.details}>ID de compañia: {parking.cmp_id || 'No definido'}</Text>
+      {loading ? (
+        <View style={{ marginTop: 20 }}>
+          <ActivityIndicator size="large" color="#FACC15" />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+          {companies.length === 0 ? (
+            <Text style={styles.noDataText}>Aún no tienes estacionamientos vinculados.</Text>
+          ) : (
+            companies.map((parking: any) => (
+              <View key={parking.cmp_id} style={styles.card}>
+                <Text style={styles.parkingName}>{parking.cmp_name}</Text>
+                <Text style={styles.details}>ID de compañía: {parking.cmp_id || 'No definido'}</Text>
 
-              <TouchableOpacity
-                style={styles.goButton}
-                onPress={() => handleGoToParking(parking.cmp_id, parking.cmp_name)}
-              >
-                <Text style={styles.goButtonText}>Usar este estacionamiento</Text>
-              </TouchableOpacity>
-            </View>
-          ))
-        )}
-      </ScrollView>
+                <TouchableOpacity
+                  style={styles.goButton}
+                  onPress={() => handleGoToParking(parking.cmp_id, parking.cmp_name)}
+                >
+                  <Text style={styles.goButtonText}>Usar este estacionamiento</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
 
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/parking/add-parkings')}>
         <Text style={styles.fabText}>＋</Text>
@@ -88,28 +90,17 @@ const styles = StyleSheet.create({
   },
   details: {
     color: '#ddd',
-    marginBottom: 4,
+    marginBottom: 10,
   },
   goButton: {
     backgroundColor: '#FACC15',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 4,
   },
   goButtonText: {
     color: '#00224D',
-    fontWeight: '600',
-  },
-  deleteButton: {
-    backgroundColor: '#b91c1c',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  deleteButtonText: {
-    color: '#fff',
     fontWeight: '600',
   },
   fab: {

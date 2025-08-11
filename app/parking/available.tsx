@@ -1,41 +1,55 @@
 // app/parking/available.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import * as SecureStore from 'expo-secure-store';
 
 type Company = {
   cmp_id: string;
   cmp_name: string;
+  cmp_date?: string;
 };
 
 export default function AvailableParking() {
   const router = useRouter();
   const { isLoggedIn } = useAuth();
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const fetchCompanies = useCallback(async () => {
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      // Si no hay token, redirigimos al login
+      if (!token) {
+        router.replace('/auth/login');
+        return;
+      }
+      const res = await api.get('/companies', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // La API a veces responde como { data: [...] } o directamente [...]
+      const list = (res?.data?.data ?? res?.data ?? []) as Company[];
+      setCompanies(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('Error al obtener compañías disponibles:', error);
+      setCompanies([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     if (!isLoggedIn) {
       router.replace('/auth/login');
       return;
     }
-
-    const fetchCompanies = async () => {
-      try {
-        const response = await api.get('/companies');
-        setCompanies(response.data);
-      } catch (error) {
-        console.error('Error al obtener estacionamientos:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCompanies();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, fetchCompanies, router]);
 
   return (
     <View style={styles.container}>
@@ -43,27 +57,34 @@ export default function AvailableParking() {
 
       {loading ? (
         <ActivityIndicator color="#FACC15" size="large" />
+      ) : companies.length === 0 ? (
+        <Text style={styles.emptyText}>No hay compañías disponibles por ahora.</Text>
       ) : (
         <ScrollView style={styles.scroll}>
           {companies.map((company) => (
             <View key={company.cmp_id} style={styles.card}>
               <Text style={styles.lotName}>{company.cmp_name}</Text>
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={() => router.push({
+
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() =>
+                  router.push({
                     pathname: '/parking/add',
                     params: {
                       cmp_id: company.cmp_id,
-                      cmp_name: company.cmp_name
-                    }
-                  })}
-                >
+                      cmp_name: company.cmp_name,
+                    },
+                  })
+                }
+              >
                 <Text style={styles.buttonText}>Solicitar acceso</Text>
               </TouchableOpacity>
             </View>
           ))}
         </ScrollView>
       )}
+
+      <BottomNav />
     </View>
   );
 }
@@ -107,5 +128,10 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#00224D',
     fontWeight: '600',
+  },
+  emptyText: {
+    color: '#facc15',
+    textAlign: 'center',
+    marginTop: 16,
   },
 });

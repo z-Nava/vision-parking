@@ -1,8 +1,10 @@
 // app/user/indexuser.tsx  (ProfileScreen)
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import api from '../../services/api';
 import { clearSession } from '@/utils/clearSession';
 import { useUserData } from '../../hooks/useUserData';
 
@@ -48,6 +50,8 @@ export default function ProfileScreen() {
     loadingReservations,
   } = useUserData();
 
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const user = {
     nombre: username,
     correo: email || 'Correo no disponible',
@@ -55,6 +59,36 @@ export default function ProfileScreen() {
   };
 
   const empresa = companies.length > 0 ? companies[0] : null;
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      const token = await SecureStore.getItemAsync('auth_token');
+      const usr_id = await SecureStore.getItemAsync('usr_id');
+
+      if (token) {
+        try {
+          await api.post(
+            '/logout',
+            { usr_id }, // si tu middleware toma el usr del token, esto es opcional pero útil
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch (err: any) {
+          // No bloqueamos el cierre de sesión local por un error del servidor
+          console.warn('Error al cerrar sesión en servidor:', err?.response?.data || err?.message);
+        }
+      }
+
+      // Siempre limpia sesión local
+      await clearSession();
+      router.replace('/auth/login');
+    } catch (e) {
+      Alert.alert('Error', 'No se pudo cerrar sesión correctamente.');
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -137,10 +171,15 @@ export default function ProfileScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.clearSessionButton, { backgroundColor: '#B22222' }]}
-          onPress={clearSession}
+          style={[styles.clearSessionButton, { backgroundColor: '#B22222', opacity: loggingOut ? 0.7 : 1 }]}
+          onPress={handleLogout}
+          disabled={loggingOut}
         >
-          <Text style={styles.clearSessionText}>🧹 Cerrar sesión</Text>
+          {loggingOut ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.clearSessionText}>🧹 Cerrar sesión</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -176,14 +215,12 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: 14,
   },
-
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FACC15',
     marginBottom: 10,
   },
-
   reservationCard: {
     backgroundColor: '#003366',
     borderRadius: 10,
