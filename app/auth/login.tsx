@@ -1,6 +1,18 @@
 // app/auth/login.tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  ScrollView,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import AlertBox from '../../components/AlertBox';
@@ -12,7 +24,6 @@ import { mapApiErrorToForm } from '../../utils/errors';
 
 export default function LoginScreen() {
   const router = useRouter();
-
   const {
     register,
     setValue,
@@ -34,110 +45,117 @@ export default function LoginScreen() {
 
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
 
+  // ref para mover foco a password desde email
+  const passRef = useRef<TextInput>(null);
+
   const onSubmit = async (data: SigninForm) => {
     setServerErr(null);
-
     const email = data.usr_email.trim().toLowerCase();
     const password = data.usr_password;
 
     try {
       const response = await loginService(email, password);
-      // Esperado por tu API:
-      // { message, data: { usr_id, usr_email } }
       const usr_id = response?.data?.usr_id;
       const usr_email = response?.data?.usr_email;
-
       if (!usr_id) throw new Error('Respuesta inválida del servidor');
 
       await SecureStore.setItemAsync('usr_id', String(usr_id));
-      if (usr_email) {
-        await SecureStore.setItemAsync('usr_email', String(usr_email));
-      }
+      if (usr_email) await SecureStore.setItemAsync('usr_email', String(usr_email));
 
-      // Ir a verificación de código
       router.push('/auth/verify-code');
     } catch (err: any) {
-      // Primero intentamos pegar el error a un campo
       const mapped = mapApiErrorToForm<SigninForm>(err, setError);
-      if (!mapped) {
-        // Si no hay campo, mostramos alerta global
-        setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
-      }
+      if (!mapped) setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Image source={require('../../assets/images/web_banner_512x512.png')} style={styles.logo} />
-      <Text style={styles.title}>Iniciar sesión</Text>
-      <Text style={styles.subtitle}>Ingresa tus credenciales</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <Image source={require('../../assets/images/web_banner_512x512.png')} style={styles.logo} />
+          <Text style={styles.title}>Iniciar sesión</Text>
+          <Text style={styles.subtitle}>Ingresa tus credenciales</Text>
 
-      {serverErr && (
-        <AlertBox
-          type="error"
-          code={serverErr.code}
-          message={serverErr.message}
-          detail={serverErr.detail}
-        />
-      )}
+          {serverErr && (
+            <AlertBox type="error" code={serverErr.code} message={serverErr.message} detail={serverErr.detail} />
+          )}
 
-      {/* usr_email */}
-      <View style={{ width: '100%' }}>
-        <TextInput
-          style={styles.input}
-          placeholder="Correo electrónico"
-          placeholderTextColor="#666"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          onChangeText={(t) => setValue('usr_email', t, { shouldValidate: true })}
-          onBlur={() => trigger('usr_email')}
-        />
-        {errors.usr_email?.message ? (
-          <Text style={styles.errorText}>{errors.usr_email.message}</Text>
-        ) : null}
-      </View>
+          {/* Email */}
+          <View style={{ width: '100%' }}>
+            <TextInput
+              style={styles.input}
+              placeholder="Correo electrónico"
+              placeholderTextColor="#666"
+              keyboardType="email-address"
+              inputMode="email"
+              autoComplete="email"
+              textContentType="emailAddress"
+              autoCapitalize="none"
+              autoFocus
+              returnKeyType="next"
+              onSubmitEditing={() => passRef.current?.focus()}
+              onChangeText={(t) => setValue('usr_email', t, { shouldValidate: true })}
+              onBlur={() => trigger('usr_email')}
+            />
+            {errors.usr_email?.message ? <Text style={styles.errorText}>{errors.usr_email.message}</Text> : null}
+          </View>
 
-      {/* usr_password */}
-      <View style={{ width: '100%' }}>
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor="#666"
-          secureTextEntry
-          onChangeText={(t) => setValue('usr_password', t, { shouldValidate: true })}
-          onBlur={() => trigger('usr_password')}
-        />
-        {errors.usr_password?.message ? (
-          <Text style={styles.errorText}>{errors.usr_password.message}</Text>
-        ) : null}
-      </View>
+          {/* Password */}
+          <View style={{ width: '100%' }}>
+            <TextInput
+              ref={passRef}
+              style={styles.input}
+              placeholder="Contraseña"
+              placeholderTextColor="#666"
+              secureTextEntry
+              autoComplete="password"
+              textContentType="password"
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit(onSubmit)}
+              onChangeText={(t) => setValue('usr_password', t, { shouldValidate: true })}
+              onBlur={() => trigger('usr_password')}
+            />
+            {errors.usr_password?.message ? <Text style={styles.errorText}>{errors.usr_password.message}</Text> : null}
+          </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
-        <Text style={styles.buttonText}>{isSubmitting ? 'Verificando...' : 'Iniciar sesión'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          <TouchableOpacity style={styles.button} onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
+            <Text style={styles.buttonText}>{isSubmitting ? 'Verificando...' : 'Iniciar sesión'}</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#00224D',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  logo: { width: 180, height: 180, marginBottom: 30, resizeMode: 'contain' },
-  title: { fontSize: 24, fontWeight: '700', color: '#fff', marginBottom: 10 },
+  container: { flexGrow: 1, backgroundColor: '#00224D', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  logo: { width: 150, height: 150, marginBottom: 30, resizeMode: 'contain' },
+  title: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 10 },
   subtitle: { color: '#ccc', fontSize: 14, marginBottom: 30, textAlign: 'center' },
   input: {
-    width: '100%', height: 50, backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 15,
-    fontSize: 16, marginBottom: 6, borderWidth: 1, borderColor: '#D1D5DB'
+    width: '100%',
+    height: 50,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
   errorText: { color: '#FCA5A5', marginBottom: 10, fontSize: 12 },
   button: {
-    width: '100%', backgroundColor: '#0A3973', paddingVertical: 14, borderRadius: 10,
-    alignItems: 'center', marginTop: 10
+    width: '100%',
+    backgroundColor: '#0A3973',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
   },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });
