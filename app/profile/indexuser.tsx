@@ -55,7 +55,7 @@ export default function ProfileScreen() {
   const user = {
     nombre: username,
     correo: email || 'Correo no disponible',
-    avatar: require('../../assets/images/react-logo.png'),
+    avatar: require('../../assets/images/app_icon_64x64.png'), // Imagen por defecto
   };
 
   const empresa = companies.length > 0 ? companies[0] : null;

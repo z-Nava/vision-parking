@@ -68,7 +68,7 @@ export default function LoginScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Image source={require('../../assets/images/react-logo.png')} style={styles.logo} />
+      <Image source={require('../../assets/images/web_banner_512x512.png')} style={styles.logo} />
       <Text style={styles.title}>Iniciar sesión</Text>
       <Text style={styles.subtitle}>Ingresa tus credenciales</Text>
 
