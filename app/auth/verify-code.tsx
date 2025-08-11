@@ -53,6 +53,15 @@ export default function VerifyCodeScreen() {
       if (isConfigured) router.push('/home/indexapp');
       else router.push('/parking/available');
     } catch (err: any) {
+      console.error(err);
+      const errors = err.response?.data?.errors || [];
+      if (errors.length > 0) {
+        const errorMessages = errors.map((err: any) => err.message)
+        console.log('Errores del servidor:', errorMessages);
+      }
+      else {
+              console.error('Error al verificar el código:', err);
+      }
       const mapped = mapApiErrorToForm<VerifyCodeForm>(err, setError);
       if (!mapped) {
         setServerErr({ code: err?.code, message: err?.message, detail: err?.detail });
