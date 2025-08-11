@@ -82,7 +82,7 @@ export default function ProfileScreen() {
 
       // Siempre limpia sesión local
       await clearSession();
-      router.replace('/auth/login');
+      router.replace('/');
     } catch (e) {
       Alert.alert('Error', 'No se pudo cerrar sesión correctamente.');
     } finally {
