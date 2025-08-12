@@ -138,7 +138,7 @@ export default function ProfileScreen() {
                   {formatDateRange(rsv.rsv_initial_date, rsv.rsv_end_date)}
                 </Text>
                 <Text style={styles.rsvDetail}>Motivo: {rsv.rsv_reason || '—'}</Text>
-                <Text style={styles.rsvDetail}>Compañía (cmp_id): {lot?.cmp_id ?? '—'}</Text>
+                <Text style={styles.rsvDetail}>Compañía: {empresa.cmp_name ?? '—'}</Text>
               </View>
             );
           })

@@ -43,7 +43,7 @@ export default function Index() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Image source={require('../assets/images/react-logo.png')} style={styles.logo} />
+      <Image source={require('../assets/images/desktop_app_256x256.png')} style={styles.logo} />
 
       <Text style={styles.title}>Bienvenido a VisionParking</Text>
       <Text style={styles.subtitle}>Selecciona una opción para continuar</Text>
