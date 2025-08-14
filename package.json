@@ -47,7 +47,8 @@
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
     "reanimated-color-picker": "^4.1.0",
-    "zod": "^4.0.16"
+    "zod": "^4.0.16",
+    "expo-notifications": "~0.31.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

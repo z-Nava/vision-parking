@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SecureStore from 'expo-secure-store';
 import api from '../../services/api';
+import { notifyIn } from '../../services/notifications';
 
 export default function ScheduleScreen() {
   const router = useRouter();
@@ -150,6 +151,21 @@ export default function ScheduleScreen() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      await notifyIn({
+        title: 'Recordatorio de reservación',
+        body: `Tu reservación del cajón ${pks_number ?? ''} inicia a las ${new Date(startISO).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}.`,
+        seconds: 10, 
+        data: { type: 'reservation-reminder', pksNumber: pks_number, startAt: startISO },
+      });
+      await notifyIn({
+        title: 'Recordatorio de reservación',
+        body: `Recuerda llegar 5 minutos antes de que inicie tu reservacion!`,
+        seconds: 15, 
+        data: { type: 'reservation-reminder', pksNumber: pks_number, startAt: startISO },
+      });
+
+
 
       Alert.alert('¡Reservado!', `Tu cajón ${pks_number} ha sido reservado`);
       router.push('/home/indexapp');
