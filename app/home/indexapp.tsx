@@ -1,11 +1,14 @@
 // app/home/indexapp.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserData } from '../../hooks/useUserData';
 import * as SecureStore from 'expo-secure-store';
 import api from '../../services/api';
+
+// ⬇️ usa tu componente
+import SpotCard from '../../components/SpotCard';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -24,6 +27,22 @@ export default function HomeScreen() {
 
   // acceso local para ocultar alerta cuando el backend te acepte
   const [localHasAccess, setLocalHasAccess] = useState<boolean>(hasAccess);
+
+  const counters = useMemo(() => {
+  const acc = { disponibles: 0, reservados: 0, ocupados: 0, total: 0 };
+    for (const lot of parkingLots || []) {
+      for (const spot of lot?.parking_spots || []) {
+        const s = spot?.status?.stu_name;
+        if (s === 'Inactivo') continue; // excluye inactivos
+        acc.total += 1;
+        if (s === 'Disponible') acc.disponibles += 1;
+        else if (s === 'Reservado') acc.reservados += 1;
+        else if (s === 'Ocupado') acc.ocupados += 1;
+      }
+    }
+    return acc;
+  }, [parkingLots]);
+  
   useEffect(() => setLocalHasAccess(hasAccess), [hasAccess]);
 
   // decide compañía activa: 1) params, 2) primera del hook
@@ -51,7 +70,6 @@ export default function HomeScreen() {
       const headers = await getAuthHeaders();
       const res = await api.get(`/companies/${activeCmpId}/parking-lots`, { headers });
       const lots = res?.data?.data ?? res?.data ?? [];
-      console.log('Cajones obtenidos de', activeCmpId, lots);
       setParkingLots(lots);
     } catch (err: any) {
       console.error('Error al obtener cajones:', err);
@@ -63,6 +81,17 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchParkingLots();
   }, [fetchParkingLots]);
+
+  // Colores por estado según tu API (si aún usas en otros lados)
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'Disponible': return '#2ecc71'; // verde
+      case 'Reservado':  return '#1f6feb'; // azul
+      case 'Ocupado':    return '#c0392b'; // rojo
+      default:           return '#bdc3c7'; // por si acaso
+    }
+  };
+  const isReservable = (status?: string) => status === 'Disponible';
 
   const handleRefreshAccess = async () => {
     try {
@@ -80,8 +109,6 @@ export default function HomeScreen() {
         setLocalHasAccess(true);
         await fetchParkingLots();
       }
-      console.log('Acceso actualizado:', accepted);
-      console.log('Compañías:', companiesList);
     } catch (error: any) {
       console.error('Error al refrescar acceso:', error);
       Alert.alert('Error', error?.message || 'No se pudo refrescar el acceso.');
@@ -89,19 +116,6 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   };
-
-  // Colores por estado según tu API
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'Disponible': return '#2ecc71'; // verde
-      case 'Reservado':  return '#1f6feb'; // azul
-      case 'Ocupado':    return '#c0392b'; // rojo
-      case 'Inactivo':   return '#7f8c8d'; // gris
-      default:           return '#bdc3c7'; // por si acaso
-    }
-  };
-
-  const isReservable = (status?: string) => status === 'Disponible';
 
   if (loading) {
     return (
@@ -143,63 +157,45 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* Conteos en vivo (sin Inactivo) */}
+        
+
         {localHasAccess && parkingLots.map((lot, idx) => (
           <View key={idx}>
             <Text style={styles.sectionTitle}>Estacionamiento: {lot.pkl_name}</Text>
+            {localHasAccess && (
+              <View style={styles.countsRow}>
+                <View style={[styles.countCard, { borderColor: '#2ecc71' }]}>
+                  <Text style={styles.countNumber}>{counters.disponibles}</Text>
+                  <Text style={styles.countLabel}>Disponibles</Text>
+                </View>
+                <View style={[styles.countCard, { borderColor: '#1f6feb' }]}>
+                  <Text style={styles.countNumber}>{counters.reservados}</Text>
+                  <Text style={styles.countLabel}>Reservados</Text>
+                </View>
+                <View style={[styles.countCard, { borderColor: '#c0392b' }]}>
+                  <Text style={styles.countNumber}>{counters.ocupados}</Text>
+                  <Text style={styles.countLabel}>Ocupados</Text>
+                </View>
+                <View style={[styles.countCard, { borderColor: '#9ca3af' }]}>
+                  <Text style={styles.countNumber}>{counters.total}</Text>
+                  <Text style={styles.countLabel}>Total</Text>
+                </View>
+              </View>
+            )}
             <View style={styles.cajonesContainer}>
               <ScrollView style={styles.cajonesScroll}>
                 {lot.parking_spots
-                  ?.filter((spot: any) => {
-                    const statusName = spot.status?.stu_name;
-                    return ['Disponible', 'Ocupado', 'Reservado'].includes(statusName);
-                  })
-                  .map((spot: any, index: number) => {
-                    const statusName = spot.status?.stu_name as string | undefined;
-                    const color = getStatusColor(statusName);
-                    const reservable = isReservable(statusName);
-
-                    return (
-                      <View key={index} style={styles.cajonCard}>
-                        <View>
-                          <Text style={styles.cajonNombre}>Cajón {spot.pks_number}</Text>
-
-                          {/* Badge de estado con color */}
-                          <View style={[styles.statusBadge, { backgroundColor: color }]}>
-                            <Text style={styles.statusBadgeText}>{statusName || '—'}</Text>
-                          </View>
-                        </View>
-
-                        {reservable ? (
-                          <TouchableOpacity
-                            style={styles.reservarButton}
-                            onPress={() =>
-                              router.push({
-                                pathname: '/parking/schedule',
-                                params: {
-                                  pks_id: spot.pks_id,
-                                  cmp_id: lot.cmp_id,
-                                  pkl_id: lot.pkl_id,
-                                  pks_number: spot.pks_number,
-                                },
-                              })
-                            }
-                          >
-                            <Text style={styles.reservarText}>Reservar</Text>
-                          </TouchableOpacity>
-                        ) : (
-                          <Text style={[styles.estadoText, { fontStyle: 'italic' }]}>
-                            No disponible
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })}
+                  ?.filter((spot: any) => spot.status?.stu_name !== 'Inactivo') // ⬅️ solo muestra activos
+                  .map((spot: any) => (
+                    <SpotCard key={spot.pks_id} spot={spot} lot={lot} />
+                  ))}
               </ScrollView>
             </View>
           </View>
         ))}
 
-        {/* Mis vehículos */}
+        {/* Mis vehículos — SIN CAMBIOS */}
         <View style={styles.vehiculosHeader}>
           <Text style={styles.sectionTitle}>Mis vehículos</Text>
           <TouchableOpacity style={styles.addButton} onPress={() => router.push('/vehicle/add')}>
@@ -223,50 +219,29 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  reservarButton: {
-    backgroundColor: '#FACC15',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reservarText: { color: '#00224D', fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#00224D', padding: 20, paddingTop: 60 },
+  title: { color: '#FACC15', fontSize: 20, fontWeight: 'bold', marginBottom: 6 },
+  welcome: { color: '#fff', marginBottom: 10 },
+  username: { fontWeight: '700', color: '#fff' },
+  company: { color: '#fff' },
+  companyName: { color: '#FACC15', fontWeight: '700' },
 
-  container: { flex: 1, backgroundColor: '#00224D', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 80 },
-  title: { fontSize: 20, color: 'white', fontWeight: '700', marginBottom: 5 },
-  welcome: { fontSize: 20, color: '#FACC15', fontWeight: 'bold', marginBottom: 20 },
-  username: { fontWeight: 'bold' },
+  alertBox: { backgroundColor: '#001A3D', padding: 12, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#0b2a66' },
+  alertText: { color: '#fff', marginBottom: 8 },
+  refreshButton: { backgroundColor: '#FACC15', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, alignSelf: 'flex-start' },
+  refreshText: { color: '#00224D', fontWeight: '700' },
 
-  sectionTitle: { fontSize: 16, color: '#FACC15', fontWeight: 'bold', marginTop: 10, marginBottom: 10 },
+  sectionTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 12, marginBottom: 8 },
+  cajonesContainer: { backgroundColor: '#001A3D', borderRadius: 10, borderWidth: 1, borderColor: '#0b2a66' },
+  cajonesScroll: { maxHeight: 360, padding: 10 },
 
-  cajonCard: {
-    backgroundColor: '#000',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cajonNombre: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  estadoText: { color: '#fff', fontWeight: '600' },
+  countsRow: {flexDirection: 'row', gap: 10, marginBottom: 12, },
+  countCard: {flex: 1, backgroundColor: '#001A3D', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1.5,},
+  countNumber: {color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 2,},
+  countLabel: {color: '#9ca3af', fontSize: 12, fontWeight: '600',},
 
-  // Badge de estado
-  statusBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-  },
-  statusBadgeText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-
-  vehiculosHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 25, marginBottom: 10 },
+  // ——— Zona vehículos (SIN CAMBIOS) ———
+  vehiculosHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5, marginBottom: 10 },
   addButton: { backgroundColor: '#FACC15', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   addButtonText: { fontSize: 20, fontWeight: 'bold', color: '#00224D' },
   vehiculosContainer: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
@@ -274,22 +249,5 @@ const styles = StyleSheet.create({
   placas: { color: '#fff', fontWeight: 'bold', marginBottom: 5 },
   modelo: { color: '#facc15', fontWeight: '600' },
 
-  alertBox: { backgroundColor: '#F87171', padding: 12, borderRadius: 10, marginBottom: 15 },
-  alertText: { color: '#fff', fontWeight: '600', textAlign: 'center' },
-  cajonesContainer: { maxHeight: 300, marginBottom: 20, borderRadius: 10, overflow: 'hidden' },
-  cajonesScroll: { backgroundColor: '#001A3D', borderRadius: 10, padding: 10 },
 
-  company: { fontSize: 16, color: 'white', marginBottom: 10 },
-  companyName: { color: '#FACC15', fontWeight: 'bold' },
-
-  refreshButton: {
-    marginTop: 10,
-    backgroundColor: '#FACC15',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    alignSelf: 'center',
-  },
-  refreshText: { color: '#00224D', fontWeight: 'bold' },
 });
