@@ -1,6 +1,9 @@
 // app/vehicle/add.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Pressable } from 'react-native';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
+  Alert, ActivityIndicator, Pressable, Modal
+} from 'react-native';
 import BottomNav from '../../components/BottomNav';
 import * as SecureStore from 'expo-secure-store';
 import api from '../../services/api';
@@ -12,8 +15,35 @@ import AlertBox from '../../components/AlertBox';
 import { useFocusEffect } from '@react-navigation/native';
 
 const SELECTED_VEH_KEY = 'selected_vehicle_id';
+const DEFAULT_HEX = '#334155';
+const HEX3or6_RE = /^#([0-9A-F]{3}|[0-9A-F]{6})$/i;
 
-/** Formatea en vivo a AAA-000-A */
+// Paleta básica (puedes editarla)
+const PALETTE = [
+  '#000000','#FFFFFF','#EF4444','#F97316','#F59E0B','#10B981',
+  '#06B6D4','#3B82F6','#8B5CF6','#EC4899','#94A3B8','#334155',
+  '#111827','#D1D5DB','#22C55E','#A855F7'
+];
+
+/** Normaliza a #RRGGBB (si viene #RGB lo expando; quito alpha si existiera). */
+function normalizeHex(input?: string | null): string {
+  if (!input) return DEFAULT_HEX;
+  let s = input.trim().toUpperCase();
+  if (!s.startsWith('#')) s = `#${s}`;
+  s = s.replace(/[^#0-9A-F]/g, '');
+  if (s.length === 9) s = s.slice(0, 7); // #RRGGBBAA -> #RRGGBB
+  if (s.length === 5) s = s.slice(0, 4); // #RGBA -> #RGB
+  if (HEX3or6_RE.test(s)) {
+    if (s.length === 4) {
+      const r = s[1], g = s[2], b = s[3];
+      s = `#${r}${r}${g}${g}${b}${b}`;
+    }
+    return s;
+  }
+  return DEFAULT_HEX;
+}
+
+/** AAA-000-A */
 function formatPlateInput(raw: string): string {
   const clean = (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   const letters1 = clean.slice(0, 3).replace(/[^A-Z]/g, '');
@@ -25,7 +55,6 @@ function formatPlateInput(raw: string): string {
   return out;
 }
 
-// helpers para ID/flag (si cambian nombres de campos, agrega aquí)
 const getVehId = (v: any) => String(v?.veh_id ?? v?.id ?? '');
 const isFlaggedSelected = (v: any) =>
   (v?.is_selected ?? v?.selected ?? v?.usr_selected ?? v?.isSelected) === true;
@@ -35,26 +64,27 @@ export default function AddVehicleScreen() {
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
   const [loadingList, setLoadingList] = useState<boolean>(true);
 
-  // selección
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-  const [savedSelectedId, setSavedSelectedId] = useState<string | null>(null); // hidrata desde SecureStore
+  const [savedSelectedId, setSavedSelectedId] = useState<string | null>(null);
   const [selectLoadingId, setSelectLoadingId] = useState<string | null>(null);
+
+  // 🎨 modal/color (básico)
+  const [colorModalVisible, setColorModalVisible] = useState(false);
+  const [tempColor, setTempColor] = useState<string>(DEFAULT_HEX);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, setError, reset } =
     useForm<VehicleForm>({
       resolver: zodResolver(vehicleSchema),
-      defaultValues: { veh_brand: '', veh_model: '', veh_year: '', veh_color: '', veh_plate: '' },
+      defaultValues: { veh_brand: '', veh_model: '', veh_year: '', veh_color: DEFAULT_HEX, veh_plate: '' },
       mode: 'onChange',
       reValidateMode: 'onChange',
     });
 
-  // Hidrata selección guardada ANTES de pedir la lista (para no parpadear)
   const hydrateSelection = useCallback(async () => {
     const stored = (await SecureStore.getItemAsync(SELECTED_VEH_KEY))?.trim() ?? null;
     if (stored) {
       setSavedSelectedId(stored);
       if (!selectedVehicleId) setSelectedVehicleId(stored);
-      // Si ya hay lista cargada, refleja la marca localmente
       setVehiculos(prev =>
         Array.isArray(prev) && prev.length
           ? prev.map(v => ({ ...v, _selectedLocal: getVehId(v) === stored }))
@@ -76,7 +106,6 @@ export default function AddVehicleScreen() {
 
       let list: any[] = res?.data?.data ?? res?.data ?? [];
 
-      // 1) Si el backend ya marca el seleccionado, úsalo como verdad
       const flagged = list.find(isFlaggedSelected);
       if (flagged) {
         const selId = getVehId(flagged);
@@ -85,14 +114,12 @@ export default function AddVehicleScreen() {
         await SecureStore.setItemAsync(SELECTED_VEH_KEY, selId);
         list = list.map(v => ({ ...v, _selectedLocal: getVehId(v) === selId }));
       } else {
-        // 2) Si no hay flag, usa lo guardado
         const stored = (await SecureStore.getItemAsync(SELECTED_VEH_KEY))?.trim() ?? null;
         if (stored && list.some(v => getVehId(v) === stored)) {
           setSelectedVehicleId(stored);
           setSavedSelectedId(stored);
           list = list.map(v => ({ ...v, _selectedLocal: getVehId(v) === stored }));
         } else {
-          // si nada coincide, limpia
           await SecureStore.deleteItemAsync(SELECTED_VEH_KEY);
           setSavedSelectedId(null);
         }
@@ -106,7 +133,6 @@ export default function AddVehicleScreen() {
     }
   }, []);
 
-  // Montaje inicial: hidrata y luego fetch
   useEffect(() => {
     (async () => {
       await hydrateSelection();
@@ -114,7 +140,6 @@ export default function AddVehicleScreen() {
     })();
   }, [hydrateSelection, fetchVehiculos]);
 
-  // Al enfocarse la pantalla (cuando regresas)
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -135,7 +160,6 @@ export default function AddVehicleScreen() {
       const usr_id = await SecureStore.getItemAsync('usr_id');
       if (!token || !usr_id) throw new Error('Usuario no autenticado');
 
-      // UI optimista + persistencia inmediata
       setSelectedVehicleId(vehicleId);
       setSavedSelectedId(vehicleId);
       await SecureStore.setItemAsync(SELECTED_VEH_KEY, vehicleId);
@@ -144,18 +168,11 @@ export default function AddVehicleScreen() {
         prev.map(v => ({ ...v, _selectedLocal: getVehId(v) === vehicleId }))
       );
 
-      await api.put(
-        `/users/vehicles/${vehicleId}`,
-        { usr_id }, // opcional
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.put(`/users/vehicles/${vehicleId}`, { usr_id }, { headers: { Authorization: `Bearer ${token}` } });
 
       Alert.alert('Éxito', 'Vehículo establecido correctamente');
-
-      // Si el backend luego marca flag, esto lo sincroniza
       await fetchVehiculos();
     } catch (err: any) {
-      // Revert a estado del servidor
       const errMsg = err?.response?.data?.message || err?.message || 'No se pudo seleccionar el vehículo';
       Alert.alert('Error', errMsg);
       setServerErr({ code: err?.code, message: errMsg, detail: err?.detail });
@@ -172,13 +189,15 @@ export default function AddVehicleScreen() {
       const token  = await SecureStore.getItemAsync('auth_token');
       if (!usr_id || !token) throw new Error('Usuario no autenticado');
 
+      const color = normalizeHex(data.veh_color);
+
       await api.post('/vehicles', {
         usr_id,
         veh_plate: data.veh_plate.trim().toUpperCase(),
         veh_brand: data.veh_brand.trim(),
         veh_model: data.veh_model.trim(),
         veh_year: Number(data.veh_year),
-        veh_color: data.veh_color.trim(),
+        veh_color: color, // ✅ siempre #RRGGBB
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -207,7 +226,6 @@ export default function AddVehicleScreen() {
             {vehiculos.map((v, index) => {
               const id = getVehId(v) || String(index);
               const apiSelected = isFlaggedSelected(v);
-              // Usa, en orden: seleccion actual, guardada, flag backend, y local
               const isSelected =
                 (selectedVehicleId ? selectedVehicleId === id : false) ||
                 (savedSelectedId ? savedSelectedId === id : false) ||
@@ -307,23 +325,92 @@ export default function AddVehicleScreen() {
           />
           {errors.veh_year && <Text style={styles.errorText}>{errors.veh_year.message}</Text>}
 
-          {/* Color */}
+          {/* 🎨 Color básico (solo swatches, sin barras) */}
           <Controller
             control={control}
             name="veh_color"
-            render={({ field: { value, onChange, onBlur} }) => (
-              <TextInput
-                style={[styles.input, errors.veh_color && styles.inputError]}
-                placeholder="Color del vehículo"
-                placeholderTextColor="#666"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                editable={!reachedLimit && !isSubmitting}
-              />
-            )}
+            render={({ field: { value, onChange } }) => {
+              const current = normalizeHex(value || DEFAULT_HEX);
+              return (
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={styles.colorLabel}>Color del vehículo</Text>
+
+                  <TouchableOpacity
+                    style={styles.colorField}
+                    onPress={() => {
+                      setTempColor(current);
+                      setColorModalVisible(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.colorSwatch, { backgroundColor: current }]} />
+                    <Text style={styles.colorHexText}>{current}</Text>
+                  </TouchableOpacity>
+
+                  {errors.veh_color && <Text style={styles.errorText}>{errors.veh_color.message}</Text>}
+
+                  <Modal
+                    animationType="slide"
+                    transparent
+                    visible={colorModalVisible}
+                    onRequestClose={() => setColorModalVisible(false)}
+                  >
+                    <View style={styles.modalOverlay}>
+                      <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>Elige un color</Text>
+
+                        {/* Grid de swatches */}
+                        <View style={styles.swatchGrid}>
+                          {PALETTE.map((hex) => {
+                            const sel = normalizeHex(hex);
+                            const active = sel === tempColor;
+                            return (
+                              <Pressable
+                                key={sel}
+                                onPress={() => setTempColor(sel)}
+                                style={[
+                                  styles.swatchItem,
+                                  { backgroundColor: sel, borderColor: active ? '#00224D' : '#E5E7EB', borderWidth: active ? 3 : 1 }
+                                ]}
+                              />
+                            );
+                          })}
+                        </View>
+
+                        {/* Preview grande */}
+                        <View style={[styles.previewBox, { backgroundColor: tempColor }]}>
+                          <Text style={styles.previewHex}>{tempColor}</Text>
+                        </View>
+
+                        <View style={styles.modalActions}>
+                          <TouchableOpacity
+                            style={[styles.modalBtn, styles.btnGhost]}
+                            onPress={() => setColorModalVisible(false)}
+                          >
+                            <Text style={styles.btnGhostText}>Cancelar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.modalBtn, styles.btnPrimary]}
+                            onPress={() => {
+                              const chosen = normalizeHex(tempColor);
+                              if (!HEX3or6_RE.test(chosen)) {
+                                Alert.alert('Color inválido', 'El color debe ser HEX de 3 o 6 dígitos.');
+                                return;
+                              }
+                              onChange(chosen);
+                              setColorModalVisible(false);
+                            }}
+                          >
+                            <Text style={styles.btnPrimaryText}>Usar color</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </Modal>
+                </View>
+              );
+            }}
           />
-          {errors.veh_color && <Text style={styles.errorText}>{errors.veh_color.message}</Text>}
 
           {/* Placas */}
           <Controller
@@ -372,17 +459,53 @@ const styles = StyleSheet.create({
   placas: { color: '#fff', fontWeight: 'bold', marginBottom: 0, flex: 1 },
   modelo: { color: '#facc15', fontWeight: '600' },
   extra: { color: '#9CA3AF', fontSize: 12 },
-  selectedChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9999, backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151' },
-  selectedChipText: { color: '#FACC15', fontSize: 12, fontWeight: '700' },
+
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#4B5563', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   checkboxChecked: { backgroundColor: '#FACC15', borderColor: '#FACC15' },
   checkboxTick: { color: '#111827', fontSize: 16, fontWeight: '900', marginTop: -2 },
+
   formCard: { backgroundColor: '#FACC15', borderRadius: 12, padding: 20 },
   formTitle: { fontSize: 16, fontWeight: 'bold', color: '#00224D', marginBottom: 4, textAlign: 'center' },
   formSubtitle: { color: '#00224D', fontSize: 12, textAlign: 'center', marginBottom: 15 },
+
   input: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 15, height: 50, fontSize: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
   inputError: { borderColor: '#B91C1C' },
   errorText: { color: '#7f1d1d', marginTop: -6, marginBottom: 8, fontSize: 12 },
+
   saveButton: { backgroundColor: '#00224D', paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: 6 },
   saveButtonText: { color: '#fff', fontWeight: '600' },
+
+  // 🎨 Color básico
+  colorLabel: { color: '#00224D', fontWeight: '700', marginBottom: 6 },
+  colorField: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1, borderColor: '#E5E7EB',
+    flexDirection: 'row', alignItems: 'center', gap: 12
+  },
+  colorSwatch: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+  colorHexText: { color: '#111827', fontWeight: '600' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1, borderColor: '#E2E8F0'
+  },
+  modalTitle: { color: '#0F172A', fontWeight: '800', fontSize: 16, marginBottom: 10 },
+  swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  swatchItem: { width: 42, height: 42, borderRadius: 10 },
+  previewBox: { marginTop: 12, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  previewHex: { color: '#0F172A', fontWeight: '800' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
+  modalBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10 },
+  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#CBD5E1' },
+  btnGhostText: { color: '#0F172A', fontWeight: '700' },
+  btnPrimary: { backgroundColor: '#00224D' },
+  btnPrimaryText: { color: '#fff', fontWeight: '800' },
 });
