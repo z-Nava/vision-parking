@@ -9,6 +9,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { vehicleSchema, type VehicleForm } from '../../validation/vehicle';
 import { mapApiErrorToForm } from '../../utils/errors';
 import AlertBox from '../../components/AlertBox';
+import { useFocusEffect } from '@react-navigation/native';
+
+const SELECTED_VEH_KEY = 'selected_vehicle_id';
 
 /** Formatea en vivo a AAA-000-A */
 function formatPlateInput(raw: string): string {
@@ -22,6 +25,11 @@ function formatPlateInput(raw: string): string {
   return out;
 }
 
+// helpers para ID/flag (si cambian nombres de campos, agrega aquí)
+const getVehId = (v: any) => String(v?.veh_id ?? v?.id ?? '');
+const isFlaggedSelected = (v: any) =>
+  (v?.is_selected ?? v?.selected ?? v?.usr_selected ?? v?.isSelected) === true;
+
 export default function AddVehicleScreen() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [serverErr, setServerErr] = useState<{ code?: string; message?: string; detail?: string } | null>(null);
@@ -29,6 +37,7 @@ export default function AddVehicleScreen() {
 
   // selección
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [savedSelectedId, setSavedSelectedId] = useState<string | null>(null); // hidrata desde SecureStore
   const [selectLoadingId, setSelectLoadingId] = useState<string | null>(null);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, setError, reset } =
@@ -38,6 +47,21 @@ export default function AddVehicleScreen() {
       mode: 'onChange',
       reValidateMode: 'onChange',
     });
+
+  // Hidrata selección guardada ANTES de pedir la lista (para no parpadear)
+  const hydrateSelection = useCallback(async () => {
+    const stored = (await SecureStore.getItemAsync(SELECTED_VEH_KEY))?.trim() ?? null;
+    if (stored) {
+      setSavedSelectedId(stored);
+      if (!selectedVehicleId) setSelectedVehicleId(stored);
+      // Si ya hay lista cargada, refleja la marca localmente
+      setVehiculos(prev =>
+        Array.isArray(prev) && prev.length
+          ? prev.map(v => ({ ...v, _selectedLocal: getVehId(v) === stored }))
+          : prev
+      );
+    }
+  }, [selectedVehicleId]);
 
   const fetchVehiculos = useCallback(async () => {
     setLoadingList(true);
@@ -50,16 +74,31 @@ export default function AddVehicleScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const list = res?.data?.data ?? res?.data ?? [];
-      setVehiculos(list);
+      let list: any[] = res?.data?.data ?? res?.data ?? [];
 
-      // Si la API ya indica seleccionado, úsalo; si no, conservamos el local.
-      const currentSelected = list.find((v: any) =>
-        (v.is_selected ?? v.selected ?? v.usr_selected ?? v.isSelected) === true
-      );
-      if (currentSelected?.veh_id || currentSelected?.id) {
-        setSelectedVehicleId(String(currentSelected.veh_id ?? currentSelected.id));
+      // 1) Si el backend ya marca el seleccionado, úsalo como verdad
+      const flagged = list.find(isFlaggedSelected);
+      if (flagged) {
+        const selId = getVehId(flagged);
+        setSelectedVehicleId(selId);
+        setSavedSelectedId(selId);
+        await SecureStore.setItemAsync(SELECTED_VEH_KEY, selId);
+        list = list.map(v => ({ ...v, _selectedLocal: getVehId(v) === selId }));
+      } else {
+        // 2) Si no hay flag, usa lo guardado
+        const stored = (await SecureStore.getItemAsync(SELECTED_VEH_KEY))?.trim() ?? null;
+        if (stored && list.some(v => getVehId(v) === stored)) {
+          setSelectedVehicleId(stored);
+          setSavedSelectedId(stored);
+          list = list.map(v => ({ ...v, _selectedLocal: getVehId(v) === stored }));
+        } else {
+          // si nada coincide, limpia
+          await SecureStore.deleteItemAsync(SELECTED_VEH_KEY);
+          setSavedSelectedId(null);
+        }
       }
+
+      setVehiculos(list);
     } catch (error) {
       console.error('Error al obtener vehículos:', error);
     } finally {
@@ -67,7 +106,23 @@ export default function AddVehicleScreen() {
     }
   }, []);
 
-  useEffect(() => { fetchVehiculos(); }, [fetchVehiculos]);
+  // Montaje inicial: hidrata y luego fetch
+  useEffect(() => {
+    (async () => {
+      await hydrateSelection();
+      await fetchVehiculos();
+    })();
+  }, [hydrateSelection, fetchVehiculos]);
+
+  // Al enfocarse la pantalla (cuando regresas)
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        await hydrateSelection();
+        await fetchVehiculos();
+      })();
+    }, [hydrateSelection, fetchVehiculos])
+  );
 
   const reachedLimit = vehiculos.length >= 4;
 
@@ -80,30 +135,31 @@ export default function AddVehicleScreen() {
       const usr_id = await SecureStore.getItemAsync('usr_id');
       if (!token || !usr_id) throw new Error('Usuario no autenticado');
 
-      // UI optimista
+      // UI optimista + persistencia inmediata
       setSelectedVehicleId(vehicleId);
+      setSavedSelectedId(vehicleId);
+      await SecureStore.setItemAsync(SELECTED_VEH_KEY, vehicleId);
+
       setVehiculos(prev =>
-        prev.map(v => {
-          const id = String(v.veh_id ?? v.id);
-          return { ...v, _selectedLocal: id === vehicleId };
-        })
+        prev.map(v => ({ ...v, _selectedLocal: getVehId(v) === vehicleId }))
       );
 
       await api.put(
         `/users/vehicles/${vehicleId}`,
-        { usr_id }, // opcional; authenticate ya tiene el user
+        { usr_id }, // opcional
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       Alert.alert('Éxito', 'Vehículo establecido correctamente');
 
-      // Si el GET trae flag, sincroniza; si no, el local se mantiene.
+      // Si el backend luego marca flag, esto lo sincroniza
       await fetchVehiculos();
     } catch (err: any) {
-      await fetchVehiculos(); // vuelve al estado del servidor si falla
+      // Revert a estado del servidor
       const errMsg = err?.response?.data?.message || err?.message || 'No se pudo seleccionar el vehículo';
-      setServerErr({ code: err?.code, message: errMsg, detail: err?.detail });
       Alert.alert('Error', errMsg);
+      setServerErr({ code: err?.code, message: errMsg, detail: err?.detail });
+      await fetchVehiculos();
     } finally {
       setSelectLoadingId(null);
     }
@@ -149,11 +205,15 @@ export default function AddVehicleScreen() {
         ) : (
           <View style={styles.vehiculosContainer}>
             {vehiculos.map((v, index) => {
-              const id = String(v.veh_id ?? v.id ?? index);
-              const apiSelected = !!(v.is_selected ?? v.selected ?? v.usr_selected ?? v.isSelected);
-              const isSelected = selectedVehicleId
-                ? selectedVehicleId === id
-                : (apiSelected || v._selectedLocal === true);
+              const id = getVehId(v) || String(index);
+              const apiSelected = isFlaggedSelected(v);
+              // Usa, en orden: seleccion actual, guardada, flag backend, y local
+              const isSelected =
+                (selectedVehicleId ? selectedVehicleId === id : false) ||
+                (savedSelectedId ? savedSelectedId === id : false) ||
+                apiSelected ||
+                v._selectedLocal === true;
+
               const isLoadingThis = selectLoadingId === id;
 
               return (
@@ -303,139 +363,26 @@ export default function AddVehicleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#00224D',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 80,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    color: '#FACC15',
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  vehiculosContainer: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-    marginBottom: 20,
-  },
-  vehiculoCard: {
-    backgroundColor: '#000',
-    borderRadius: 10,
-    padding: 10,
-    width: '48%',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-  },
-  vehiculoCardSelected: {
-    borderColor: '#FACC15',
-    shadowColor: '#FACC15',
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  placas: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginBottom: 0,
-    flex: 1,
-  },
-  modelo: {
-    color: '#facc15',
-    fontWeight: '600',
-  },
-  extra: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  selectedChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 9999,
-    backgroundColor: '#1F2937',
-    borderWidth: 1,
-    borderColor: '#374151',
-  },
-  selectedChipText: {
-    color: '#FACC15',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#4B5563',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  checkboxChecked: {
-    backgroundColor: '#FACC15',
-    borderColor: '#FACC15',
-  },
-  checkboxTick: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
-    marginTop: -2,
-  },
-  formCard: {
-    backgroundColor: '#FACC15',
-    borderRadius: 12,
-    padding: 20,
-  },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00224D',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  formSubtitle: {
-    color: '#00224D',
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    height: 50,
-    fontSize: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  inputError: {
-    borderColor: '#B91C1C',
-  },
-  errorText: {
-    color: '#7f1d1d',
-    marginTop: -6,
-    marginBottom: 8,
-    fontSize: 12,
-  },
-  saveButton: {
-    backgroundColor: '#00224D',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#00224D', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 80 },
+  sectionTitle: { fontSize: 18, color: '#FACC15', fontWeight: 'bold', marginBottom: 10 },
+  vehiculosContainer: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 20 },
+  vehiculoCard: { backgroundColor: '#000', borderRadius: 10, padding: 10, width: '48%', borderWidth: 1, borderColor: '#1F2937' },
+  vehiculoCardSelected: { borderColor: '#FACC15', shadowColor: '#FACC15', shadowOpacity: 0.35, shadowRadius: 8, elevation: 3 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  placas: { color: '#fff', fontWeight: 'bold', marginBottom: 0, flex: 1 },
+  modelo: { color: '#facc15', fontWeight: '600' },
+  extra: { color: '#9CA3AF', fontSize: 12 },
+  selectedChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9999, backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151' },
+  selectedChipText: { color: '#FACC15', fontSize: 12, fontWeight: '700' },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#4B5563', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  checkboxChecked: { backgroundColor: '#FACC15', borderColor: '#FACC15' },
+  checkboxTick: { color: '#111827', fontSize: 16, fontWeight: '900', marginTop: -2 },
+  formCard: { backgroundColor: '#FACC15', borderRadius: 12, padding: 20 },
+  formTitle: { fontSize: 16, fontWeight: 'bold', color: '#00224D', marginBottom: 4, textAlign: 'center' },
+  formSubtitle: { color: '#00224D', fontSize: 12, textAlign: 'center', marginBottom: 15 },
+  input: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 15, height: 50, fontSize: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+  inputError: { borderColor: '#B91C1C' },
+  errorText: { color: '#7f1d1d', marginTop: -6, marginBottom: 8, fontSize: 12 },
+  saveButton: { backgroundColor: '#00224D', paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginTop: 6 },
+  saveButtonText: { color: '#fff', fontWeight: '600' },
 });
