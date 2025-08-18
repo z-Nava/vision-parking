@@ -6,9 +6,17 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserData } from '../../hooks/useUserData';
 import * as SecureStore from 'expo-secure-store';
 import api from '../../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 // ⬇️ usa tu componente
 import SpotCard from '../../components/SpotCard';
+
+const SELECTED_VEH_KEY = 'selected_vehicle_id';
+
+// helpers para ID/flag
+const getVehId = (v: any) => String(v?.veh_id ?? v?.id ?? '');
+const isFlaggedSelected = (v: any) =>
+  (v?.is_selected ?? v?.selected ?? v?.usr_selected ?? v?.isSelected) === true;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -28,8 +36,12 @@ export default function HomeScreen() {
   // acceso local para ocultar alerta cuando el backend te acepte
   const [localHasAccess, setLocalHasAccess] = useState<boolean>(hasAccess);
 
+  // ✅ selección (solo indicador)
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [savedSelectedId, setSavedSelectedId] = useState<string | null>(null);
+
   const counters = useMemo(() => {
-  const acc = { disponibles: 0, reservados: 0, ocupados: 0, total: 0 };
+    const acc = { disponibles: 0, reservados: 0, ocupados: 0, total: 0 };
     for (const lot of parkingLots || []) {
       for (const spot of lot?.parking_spots || []) {
         const s = spot?.status?.stu_name;
@@ -81,6 +93,32 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchParkingLots();
   }, [fetchParkingLots]);
+
+  // 🔄 Hidratar selección desde SecureStore
+  const hydrateSelection = useCallback(async () => {
+    const stored = (await SecureStore.getItemAsync(SELECTED_VEH_KEY))?.trim() ?? null;
+    if (stored) {
+      setSavedSelectedId(stored);
+      if (!selectedVehicleId) setSelectedVehicleId(stored);
+    }
+  }, [selectedVehicleId]);
+
+  // Al montar y al enfocar: hidrata (por si volviste desde add.tsx)
+  useEffect(() => { hydrateSelection(); }, [hydrateSelection]);
+  useFocusEffect(useCallback(() => { hydrateSelection(); }, [hydrateSelection]));
+
+  // Si el backend ya marca el seleccionado dentro de `vehicles`, úsalo como verdad
+  useEffect(() => {
+    if (!vehicles || vehicles.length === 0) return;
+    const flagged = vehicles.find(isFlaggedSelected);
+    if (flagged) {
+      const selId = getVehId(flagged);
+      setSelectedVehicleId(selId);
+      setSavedSelectedId(selId);
+      // guarda para que persista en otras pantallas
+      SecureStore.setItemAsync(SELECTED_VEH_KEY, selId).catch(() => {});
+    }
+  }, [vehicles]);
 
   // Colores por estado según tu API (si aún usas en otros lados)
   const getStatusColor = (status?: string) => {
@@ -158,8 +196,6 @@ export default function HomeScreen() {
         )}
 
         {/* Conteos en vivo (sin Inactivo) */}
-        
-
         {localHasAccess && parkingLots.map((lot, idx) => (
           <View key={idx}>
             <Text style={styles.sectionTitle}>Estacionamiento: {lot.pkl_name}</Text>
@@ -186,7 +222,7 @@ export default function HomeScreen() {
             <View style={styles.cajonesContainer}>
               <ScrollView style={styles.cajonesScroll}>
                 {lot.parking_spots
-                  ?.filter((spot: any) => spot.status?.stu_name !== 'Inactivo') // ⬅️ solo muestra activos
+                  ?.filter((spot: any) => spot.status?.stu_name !== 'Inactivo') // ⬅️ solo activos
                   .map((spot: any) => (
                     <SpotCard key={spot.pks_id} spot={spot} lot={lot} />
                   ))}
@@ -195,7 +231,7 @@ export default function HomeScreen() {
           </View>
         ))}
 
-        {/* Mis vehículos — SIN CAMBIOS */}
+        {/* Mis vehículos — con check del seleccionado (indicador) */}
         <View style={styles.vehiculosHeader}>
           <Text style={styles.sectionTitle}>Mis vehículos</Text>
           <TouchableOpacity style={styles.addButton} onPress={() => router.push('/vehicle/add')}>
@@ -204,12 +240,29 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.vehiculosContainer}>
-          {vehicles.map((vehiculo, index) => (
-            <View key={index} style={styles.vehiculoCard}>
-              <Text style={styles.placas}>{vehiculo.veh_plate}</Text>
-              <Text style={styles.modelo}>{vehiculo.veh_model} {vehiculo.veh_year}</Text>
-            </View>
-          ))}
+          {vehicles.map((v: any, index: number) => {
+            const id = getVehId(v) || String(index);
+            const apiSelected = isFlaggedSelected(v);
+            const isSelected =
+              (selectedVehicleId ? selectedVehicleId === id : false) ||
+              (savedSelectedId ? savedSelectedId === id : false) ||
+              apiSelected ||
+              v._selectedLocal === true;
+
+            return (
+              
+              <View key={id} style={[styles.vehiculoCard, isSelected && styles.vehiculoCardSelected]}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.placas}>{v.veh_plate}</Text>                 
+                  {/* Indicador de check (no clicable aquí) */}
+                  <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                    {isSelected ? <Text style={styles.checkboxTick}>✓</Text> : null}
+                  </View>
+                </View>
+                <Text style={styles.modelo}>{v.veh_model} {v.veh_year}</Text>
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -235,19 +288,26 @@ const styles = StyleSheet.create({
   cajonesContainer: { backgroundColor: '#001A3D', borderRadius: 10, borderWidth: 1, borderColor: '#0b2a66' },
   cajonesScroll: { maxHeight: 360, padding: 10 },
 
-  countsRow: {flexDirection: 'row', gap: 10, marginBottom: 12, },
-  countCard: {flex: 1, backgroundColor: '#001A3D', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1.5,},
-  countNumber: {color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 2,},
-  countLabel: {color: '#9ca3af', fontSize: 12, fontWeight: '600',},
+  countsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  countCard: { flex: 1, backgroundColor: '#001A3D', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1.5 },
+  countNumber: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 2 },
+  countLabel: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
 
-  // ——— Zona vehículos (SIN CAMBIOS) ———
+  // Vehículos
   vehiculosHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5, marginBottom: 10 },
   addButton: { backgroundColor: '#FACC15', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   addButtonText: { fontSize: 20, fontWeight: 'bold', color: '#00224D' },
   vehiculosContainer: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  vehiculoCard: { backgroundColor: '#000', borderRadius: 10, padding: 10, width: '48%', marginBottom: 10 },
-  placas: { color: '#fff', fontWeight: 'bold', marginBottom: 5 },
+  vehiculoCard: { backgroundColor: '#000', borderRadius: 10, padding: 10, width: '48%', marginBottom: 10, borderWidth: 1, borderColor: '#1F2937' },
+  vehiculoCardSelected: { borderColor: '#FACC15', shadowColor: '#FACC15', shadowOpacity: 0.35, shadowRadius: 8, elevation: 3 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  placas: { color: '#fff', fontWeight: 'bold', marginBottom: 0, flex: 1 },
   modelo: { color: '#facc15', fontWeight: '600' },
 
+  selectedChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9999, backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151' },
+  selectedChipText: { color: '#FACC15', fontSize: 12, fontWeight: '700' },
 
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#4B5563', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  checkboxChecked: { backgroundColor: '#FACC15', borderColor: '#FACC15' },
+  checkboxTick: { color: '#111827', fontSize: 16, fontWeight: '900', marginTop: -2 },
 });
